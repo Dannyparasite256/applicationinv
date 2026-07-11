@@ -1,3 +1,12 @@
+# Render Blueprint - free-tier friendly deploy for Enterprise IMS
+# Docs: https://render.com/docs/blueprint-spec
+#
+# After first deploy:
+# 1. Copy the API URL into the web service's VITE_API_URL and redeploy the web service
+# 2. Set CORS_ORIGINS on the API to your web URL
+# 3. Optionally run seed once from Render Shell:
+#    npm run db:seed -w backend
+
 databases:
   - name: eims-postgres
     plan: free
@@ -5,6 +14,7 @@ databases:
     user: ims
 
 services:
+  # Backend API
   - type: web
     name: eims-api
     runtime: node
@@ -44,6 +54,7 @@ services:
       - key: DEFAULT_TENANT_SLUG
         value: demo
 
+  # Frontend
   - type: web
     name: eims-web
     runtime: static
@@ -51,6 +62,10 @@ services:
     rootDir: .
     buildCommand: npm install && npm run build -w frontend
     staticPublishPath: frontend/dist
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
     routes:
       - type: rewrite
         source: /*
