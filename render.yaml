@@ -1,13 +1,3 @@
-<<<<<<< Updated upstream
-# Render Blueprint - free-tier friendly deploy for Enterprise IMS
-# Docs: https://render.com/docs/blueprint-spec
-#
-# After first deploy:
-# 1. Copy the API URL into the web service's VITE_API_URL and redeploy the web service
-# 2. Set CORS_ORIGINS on the API to your web URL
-# 3. Optionally run seed once from Render Shell:
-#    npm run db:seed -w backend
-=======
 # Enterprise IMS — Render free-tier Blueprint
 # Repo: https://github.com/Dannyparasite256/applicationinv
 # Docs: https://render.com/docs/blueprint-spec
@@ -28,7 +18,6 @@
 #        API_URL      = https://YOUR-API-URL
 #      then Manual Deploy (or wait for auto redeploy)
 #   4. Optional: eims-api → Shell → npm run db:seed -w backend
->>>>>>> Stashed changes
 
 databases:
   - name: eims-postgres
@@ -39,11 +28,7 @@ databases:
     postgresMajorVersion: "16"
 
 services:
-<<<<<<< Updated upstream
-  # Backend API
-=======
   # ---------------- Backend API (Node) ----------------
->>>>>>> Stashed changes
   - type: web
     name: eims-api
     runtime: node
@@ -51,7 +36,7 @@ services:
     region: oregon
     # Install build tools (tsc/prisma live in devDependencies), generate client, compile
     buildCommand: npm install --include=dev && npm run db:generate -w backend && npm run build -w backend
-    # Migrate then start (preDeploy is less reliable on free; keep migrate in start)
+    # Migrate then start (keep migrate in start for free-tier reliability)
     startCommand: npm run db:migrate:deploy -w backend && npm run start -w backend
     healthCheckPath: /api/v1/health
     envVars:
@@ -66,12 +51,9 @@ services:
         fromDatabase:
           name: eims-postgres
           property: connectionString
-<<<<<<< Updated upstream
-=======
       # Redis not required on free tier (app falls back to in-memory)
       - key: REDIS_URL
         value: redis://127.0.0.1:6379
->>>>>>> Stashed changes
       - key: JWT_ACCESS_SECRET
         generateValue: true
       - key: JWT_REFRESH_SECRET
@@ -86,13 +68,9 @@ services:
         value: "false"
       - key: OAUTH_GOOGLE_ENABLED
         value: "false"
-      # Allow browser calls until you lock CORS to the real web URL (see header notes)
+      # Allow browser calls until you lock CORS to the real web URL
       - key: CORS_ORIGINS
-<<<<<<< Updated upstream
-        value: https://eims-web.onrender.com
-=======
         value: "*"
->>>>>>> Stashed changes
       - key: APP_URL
         value: https://eims-web.onrender.com
       - key: API_URL
@@ -102,15 +80,10 @@ services:
       - key: RATE_LIMIT_MAX
         value: "200"
 
-<<<<<<< Updated upstream
-  # Frontend
-=======
   # ---------------- Frontend (static Vite build) ----------------
->>>>>>> Stashed changes
   - type: web
     name: eims-web
     runtime: static
-    # Static sites are free; plan free is valid for type: web
     plan: free
     buildCommand: npm install --include=dev && npm run build -w frontend
     staticPublishPath: frontend/dist
@@ -119,7 +92,6 @@ services:
         name: X-Frame-Options
         value: SAMEORIGIN
     routes:
-      # SPA client-side routing
       - type: rewrite
         source: /*
         destination: /index.html
