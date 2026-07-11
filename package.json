@@ -1,0 +1,40 @@
+{
+  "name": "enterprise-ims",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Enterprise Inventory Management System - Multi-tenant ERP for retail, pharmacy, hospital & more",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w backend\" \"npm run dev -w frontend\"",
+    "dev:backend": "npm run dev -w backend",
+    "dev:frontend": "npm run dev -w frontend",
+    "build": "npm run build -w backend && npm run build -w frontend",
+    "test": "npm run test -w backend",
+    "db:migrate": "npm run db:migrate -w backend",
+    "db:migrate:deploy": "npm run db:migrate:deploy -w backend",
+    "db:generate": "npm run db:generate -w backend",
+    "db:seed": "npm run db:seed -w backend",
+    "db:studio": "npm run db:studio -w backend",
+    "start:api": "npm run start -w backend",
+    "docker:up": "docker compose up -d --build",
+    "docker:down": "docker compose down",
+    "lint": "npm run lint -w backend && npm run lint -w frontend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "allowScripts": {
+    "@prisma/client@6.19.3": true,
+    "@prisma/engines@6.19.3": true,
+    "@scarf/scarf@1.4.0": true,
+    "esbuild@0.28.1": true,
+    "esbuild@0.25.12": true,
+    "prisma@6.19.3": true
+  }
+}

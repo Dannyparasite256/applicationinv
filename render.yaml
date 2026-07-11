@@ -1,0 +1,80 @@
+# Render Blueprint — free-tier friendly deploy for Enterprise IMS
+# Docs: https://render.com/docs/blueprint-spec
+#
+# After first deploy:
+# 1. Copy the API URL into the web service's VITE_API_URL (and rebuild web)
+# 2. Set CORS_ORIGINS on the API to your web URL
+# 3. Optionally run seed once from Render Shell:
+#    npm run db:seed -w backend
+
+databases:
+  - name: eims-postgres
+    plan: free
+    databaseName: enterprise_ims
+    user: ims
+
+services:
+  # -------- Backend API --------
+  - type: web
+    name: eims-api
+    runtime: node
+    plan: free
+    region: oregon
+    rootDir: .
+    buildCommand: npm install && npm run build -w backend
+    startCommand: npm run db:migrate:deploy -w backend && npm run start -w backend
+    healthCheckPath: /api/v1/docs
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "4000"
+      - key: API_PREFIX
+        value: /api/v1
+      - key: DATABASE_URL
+        fromDatabase:
+          name: eims-postgres
+          property: connectionString
+      - key: REDIS_URL
+        value: redis://localhost:6379
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      - key: APP_NAME
+        value: Enterprise IMS
+      - key: EMAIL_ENABLED
+        value: "false"
+      - key: CORS_ORIGINS
+        # Replace after web service gets a URL (e.g. https://eims-web.onrender.com)
+        value: https://eims-web.onrender.com
+      - key: APP_URL
+        value: https://eims-web.onrender.com
+      - key: API_URL
+        # Replace with your real API URL after first deploy
+        value: https://eims-api.onrender.com
+      - key: DEFAULT_TENANT_SLUG
+        value: demo
+
+  # -------- Frontend (static) --------
+  - type: web
+    name: eims-web
+    runtime: static
+    plan: free
+    rootDir: .
+    buildCommand: npm install && npm run build -w frontend
+    staticPublishPath: frontend/dist
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        # Must be the public API URL + /api/v1 (update after API deploy)
+        value: https://eims-api.onrender.com/api/v1

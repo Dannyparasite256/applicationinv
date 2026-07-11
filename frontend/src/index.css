@@ -1,0 +1,516 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 33% 98%;
+    --foreground: 224 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 224 47% 11%;
+    --primary: 239 84% 57%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 220 25% 96%;
+    --secondary-foreground: 224 47% 11%;
+    --muted: 220 20% 96%;
+    --muted-foreground: 220 12% 42%;
+    --accent: 192 91% 42%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+    --success: 152 69% 40%;
+    --success-foreground: 210 40% 98%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 224 47% 11%;
+    --border: 220 20% 91%;
+    --input: 220 20% 91%;
+    --ring: 239 84% 57%;
+    --radius: 1rem;
+  }
+
+  .dark {
+    --background: 224 40% 6%;
+    --foreground: 210 40% 98%;
+    --card: 224 36% 9%;
+    --card-foreground: 210 40% 98%;
+    --primary: 239 84% 67%;
+    --primary-foreground: 224 40% 6%;
+    --secondary: 222 28% 14%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 222 28% 12%;
+    --muted-foreground: 215 16% 62%;
+    --accent: 192 91% 48%;
+    --accent-foreground: 224 40% 6%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 40% 98%;
+    --success: 152 69% 45%;
+    --success-foreground: 210 40% 98%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 224 47% 11%;
+    --border: 222 24% 16%;
+    --input: 222 24% 16%;
+    --ring: 239 84% 67%;
+  }
+
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+  }
+
+  :root {
+    /*
+     * Default = phone system font (WhatsApp-style).
+     * On Android WebView, generic `sans-serif` maps to Typeface.DEFAULT
+     * (Roboto or the OEM / user system font — not a downloaded web font).
+     */
+    --font-sans: sans-serif;
+    --font-display: sans-serif;
+    --font-tracking: 0;
+    /* Compact layout tokens — content fits phone X/Y without waste or overflow */
+    --app-topbar-h: 3.25rem;
+    --page-pad-x: 0.625rem;
+    --page-pad-y: 0.625rem;
+    --page-gap: 0.625rem;
+    --card-pad: 0.75rem;
+    --control-h: 2.25rem;
+    --radius: 0.75rem;
+  }
+
+  @media (min-width: 640px) {
+    :root {
+      --app-topbar-h: 3.5rem;
+      --page-pad-x: 1rem;
+      --page-pad-y: 0.875rem;
+      --page-gap: 0.875rem;
+      --card-pad: 1rem;
+      --control-h: 2.5rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    :root {
+      --app-topbar-h: 3.75rem;
+      --page-pad-x: 1.5rem;
+      --page-pad-y: 1.25rem;
+      --page-gap: 1.25rem;
+      --card-pad: 1.25rem;
+      --control-h: 2.5rem;
+      --radius: 1rem;
+    }
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    height: 100%;
+    font-family: var(--font-sans);
+    overflow-x: hidden;
+    /* Prevent iOS text size inflation blowing layouts */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+    min-height: 100%;
+    min-height: 100dvh;
+    font-family: var(--font-sans);
+    overflow-x: hidden;
+    width: 100%;
+    max-width: 100vw;
+  }
+
+  /* Force inheritance so Tailwind utility classes can't leak a different face in system mode */
+  html.font-system,
+  html.font-system body,
+  html.font-system button,
+  html.font-system input,
+  html.font-system select,
+  html.font-system textarea,
+  html.font-system optgroup {
+    font-family: var(--font-sans) !important;
+  }
+
+  /* Android: pure generic family = device system typeface */
+  html[data-platform="android"].font-system {
+    --font-sans: sans-serif;
+    --font-display: sans-serif;
+  }
+
+  /* iOS: SF Pro / system UI */
+  html[data-platform="ios"].font-system {
+    --font-sans: -apple-system, system-ui, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --font-display: -apple-system, system-ui, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  }
+
+  #root {
+    min-height: 100%;
+    min-height: 100dvh;
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
+  /* Logged-in shell locks viewport; auth pages may scroll the document */
+  #root:has(.app-shell) {
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+  }
+
+  /* Images / media never force horizontal scroll */
+  img, video, canvas, svg {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Form controls fill containers cleanly on mobile */
+  input, select, textarea, button {
+    max-width: 100%;
+  }
+
+  /* Tables: allow wrap inside cells when needed */
+  table {
+    border-collapse: collapse;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: var(--font-display);
+    letter-spacing: var(--font-tracking, 0);
+  }
+
+  html.font-system h1,
+  html.font-system h2,
+  html.font-system h3,
+  html.font-system .font-display {
+    letter-spacing: normal;
+  }
+
+  /* Capacitor Android / iOS safe areas */
+  .native-app body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+  }
+
+  .native-app button,
+  .native-app a,
+  .native-app [role='button'] {
+    touch-action: manipulation;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply bg-card/80 backdrop-blur-2xl border border-border/70 shadow-soft;
+  }
+
+  /**
+   * Standard page frame — fits phone X/Y axes:
+   * - limited horizontal padding
+   * - vertical scroll lives in <main>
+   * - nothing wider than the viewport
+   */
+  .page-container {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin-left: auto;
+    margin-right: auto;
+    padding: var(--page-pad-y) var(--page-pad-x);
+    padding-bottom: max(1rem, calc(env(safe-area-inset-bottom) + 0.75rem));
+    display: flex;
+    flex-direction: column;
+    gap: var(--page-gap);
+    overflow-x: clip;
+    @apply animate-in-up;
+  }
+
+  @media (min-width: 1280px) {
+    .page-container {
+      max-width: 1400px;
+    }
+  }
+
+  .page-header {
+    @apply flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 shrink-0 min-w-0;
+  }
+
+  .page-header > div {
+    min-width: 0;
+  }
+
+  /* Action buttons under titles — wrap, never overflow X */
+  .page-actions {
+    @apply flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0 w-full sm:w-auto min-w-0;
+  }
+
+  /* Tables / long lists: horizontal scroll without breaking the page */
+  .table-scroll {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: visible;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table-scroll table {
+    width: 100%;
+    min-width: 100%;
+  }
+
+  .table-scroll th,
+  .table-scroll td {
+    white-space: nowrap;
+  }
+
+  /* Allow optional wrap for description cells */
+  .table-scroll td.wrap-cell,
+  .table-scroll .wrap-cell {
+    white-space: normal;
+    max-width: 10rem;
+  }
+
+  @media (min-width: 640px) {
+    .table-scroll td.wrap-cell,
+    .table-scroll .wrap-cell {
+      max-width: 16rem;
+    }
+  }
+
+  .scroll-panel {
+    @apply min-h-0 overflow-y-auto overscroll-contain;
+  }
+
+  .page-title {
+    @apply text-lg sm:text-xl lg:text-2xl font-bold tracking-tight font-display truncate;
+  }
+
+  .page-subtitle {
+    @apply text-[11px] sm:text-sm text-muted-foreground mt-0.5 line-clamp-2;
+  }
+
+  .kpi-card {
+    @apply relative overflow-hidden rounded-xl border border-border/80 bg-card p-2.5 sm:p-3.5 shadow-soft
+      transition-all duration-300 hover:shadow-elevated hover:border-primary/25 min-w-0;
+  }
+
+  .kpi-card::after {
+    content: '';
+    position: absolute;
+    inset: auto -20% -40% auto;
+    width: 4.5rem;
+    height: 4.5rem;
+    border-radius: 9999px;
+    background: radial-gradient(circle, hsl(var(--primary) / 0.12), transparent 70%);
+    pointer-events: none;
+  }
+
+  .surface-card {
+    @apply rounded-xl sm:rounded-2xl border border-border/80 bg-card shadow-soft min-w-0 overflow-hidden;
+  }
+
+  .brand-mark {
+    @apply flex items-center justify-center rounded-xl sm:rounded-2xl bg-brand-gradient text-primary-foreground
+      font-bold shadow-glow shrink-0 overflow-hidden;
+  }
+
+  .section-label {
+    @apply text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground;
+  }
+
+  /* Responsive content grid helpers */
+  .content-grid {
+    @apply grid gap-2.5 sm:gap-3 min-w-0 w-full;
+  }
+
+  .stack-y {
+    @apply flex flex-col gap-2.5 sm:gap-3 min-w-0 w-full;
+  }
+
+  .fit-x {
+    @apply w-full max-w-full min-w-0 overflow-x-clip;
+  }
+
+  /* Full-screen overlays that always fit the phone */
+  .modal-overlay {
+    @apply fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4;
+    background: rgba(0, 0, 0, 0.45);
+  }
+
+  .modal-sheet {
+    width: 100%;
+    max-width: 32rem;
+    max-height: min(92dvh, 100%);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    @apply rounded-t-2xl sm:rounded-2xl border border-border bg-card shadow-elevated;
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+
+  .modal-sheet-lg {
+    max-width: 42rem;
+  }
+
+  /* Dropdowns / popovers never leave the viewport */
+  .panel-float {
+    width: min(20rem, calc(100vw - 1rem));
+    max-height: min(24rem, 70dvh);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    @apply rounded-xl border border-border bg-card shadow-xl;
+  }
+
+  /* Compact form field */
+  .field {
+    @apply flex flex-col gap-1 min-w-0;
+  }
+
+  .field-label {
+    @apply text-[11px] sm:text-xs font-medium text-muted-foreground;
+  }
+
+  .field-control {
+    height: var(--control-h);
+    width: 100%;
+    max-width: 100%;
+    @apply rounded-lg border border-input bg-background px-2.5 text-sm outline-none
+      focus-visible:ring-2 focus-visible:ring-ring min-w-0;
+  }
+
+  .chip-row {
+    @apply flex flex-wrap items-center gap-1.5 min-w-0;
+  }
+
+  .bg-grid-fade {
+    background-image:
+      radial-gradient(ellipse 90% 55% at 50% -15%, hsl(var(--primary) / 0.12), transparent),
+      radial-gradient(ellipse 50% 40% at 100% 0%, hsl(var(--accent) / 0.06), transparent);
+    background-size: auto, auto;
+  }
+
+  /* Topbar height token for POS full-height panes */
+  .app-topbar {
+    height: var(--app-topbar-h);
+    min-height: var(--app-topbar-h);
+  }
+
+  /* Soft empty-state for lists */
+  .empty-state {
+    @apply flex flex-col items-center justify-center text-center py-10 px-4 text-muted-foreground gap-2;
+  }
+}
+
+@layer utilities {
+  .animate-in-up {
+    animation: in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+
+@keyframes in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 25%,
+    hsl(var(--muted-foreground) / 0.08) 50%,
+    hsl(var(--muted)) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: var(--radius);
+}
+
+/* Scrollbar — thin on mobile */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.28);
+  border-radius: 4px;
+}
+
+/* Native: slightly denser chrome + safe padding */
+.native-app .page-container {
+  padding-left: max(var(--page-pad-x), env(safe-area-inset-left));
+  padding-right: max(var(--page-pad-x), env(safe-area-inset-right));
+}
+
+.native-app {
+  --page-pad-x: 0.625rem;
+  --page-pad-y: 0.5rem;
+  --page-gap: 0.5rem;
+}
+
+@media (min-width: 640px) {
+  .native-app {
+    --page-pad-x: 0.875rem;
+    --page-pad-y: 0.75rem;
+    --page-gap: 0.75rem;
+  }
+}
+
+/* Prevent long unbroken strings from exploding the layout */
+.break-safe {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Chart containers — shorter on phones so Y axis content fits */
+.chart-box {
+  height: 11rem;
+  width: 100%;
+  min-width: 0;
+}
+
+@media (min-width: 640px) {
+  .chart-box {
+    height: 14rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .chart-box {
+    height: 16rem;
+  }
+}
+
+.chart-box-sm {
+  height: 9rem;
+  width: 100%;
+  min-width: 0;
+}
+
+@media (min-width: 640px) {
+  .chart-box-sm {
+    height: 11rem;
+  }
+}

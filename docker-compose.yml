@@ -1,0 +1,89 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: eims-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ims
+      POSTGRES_PASSWORD: ims_secret
+      POSTGRES_DB: enterprise_ims
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/backup.sh:/scripts/backup.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ims -d enterprise_ims"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: eims-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: eims-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://ims:ims_secret@postgres:5432/enterprise_ims?schema=public
+      REDIS_URL: redis://redis:6379
+      PORT: 4000
+      NODE_ENV: production
+    ports:
+      - "4000:4000"
+    volumes:
+      - uploads_data:/app/uploads
+      - backups_data:/app/backups
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api/v1
+    container_name: eims-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: eims-nginx
+    restart: unless-stopped
+    depends_on:
+      - api
+      - web
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads_data:
+  backups_data:
