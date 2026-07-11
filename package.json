@@ -19,6 +19,9 @@
     "db:seed": "npm run db:seed -w backend",
     "db:studio": "npm run db:studio -w backend",
     "start:api": "npm run start -w backend",
+    "render:build:api": "npm install --include=dev && npm run db:generate -w backend && npm run build -w backend",
+    "render:start:api": "npm run db:migrate:deploy -w backend && npm run start -w backend",
+    "render:build:web": "npm install --include=dev && npm run build -w frontend",
     "docker:up": "docker compose up -d --build",
     "docker:down": "docker compose down",
     "lint": "npm run lint -w backend && npm run lint -w frontend"

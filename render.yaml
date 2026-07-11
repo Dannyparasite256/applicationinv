@@ -1,3 +1,4 @@
+<<<<<<< Updated upstream
 # Render Blueprint - free-tier friendly deploy for Enterprise IMS
 # Docs: https://render.com/docs/blueprint-spec
 #
@@ -6,35 +7,71 @@
 # 2. Set CORS_ORIGINS on the API to your web URL
 # 3. Optionally run seed once from Render Shell:
 #    npm run db:seed -w backend
+=======
+# Enterprise IMS — Render free-tier Blueprint
+# Repo: https://github.com/Dannyparasite256/applicationinv
+# Docs: https://render.com/docs/blueprint-spec
+#
+# Creates:
+#   1) eims-postgres  (free Postgres — expires after ~30 days on free)
+#   2) eims-api       (free Node web service)
+#   3) eims-web       (free static site)
+#
+# IMPORTANT after first successful deploy (manual in Render dashboard):
+#   1. Open eims-api → copy its URL (e.g. https://eims-api-xxxx.onrender.com)
+#   2. Open eims-web → Environment → set:
+#        VITE_API_URL = https://YOUR-API-URL/api/v1
+#      then Manual Deploy → Clear build cache & deploy
+#   3. Open eims-api → Environment → set:
+#        CORS_ORIGINS = https://YOUR-WEB-URL
+#        APP_URL      = https://YOUR-WEB-URL
+#        API_URL      = https://YOUR-API-URL
+#      then Manual Deploy (or wait for auto redeploy)
+#   4. Optional: eims-api → Shell → npm run db:seed -w backend
+>>>>>>> Stashed changes
 
 databases:
   - name: eims-postgres
     plan: free
+    region: oregon
     databaseName: enterprise_ims
     user: ims
+    postgresMajorVersion: "16"
 
 services:
+<<<<<<< Updated upstream
   # Backend API
+=======
+  # ---------------- Backend API (Node) ----------------
+>>>>>>> Stashed changes
   - type: web
     name: eims-api
     runtime: node
     plan: free
     region: oregon
-    rootDir: .
-    buildCommand: npm install && npm run build -w backend
+    # Install build tools (tsc/prisma live in devDependencies), generate client, compile
+    buildCommand: npm install --include=dev && npm run db:generate -w backend && npm run build -w backend
+    # Migrate then start (preDeploy is less reliable on free; keep migrate in start)
     startCommand: npm run db:migrate:deploy -w backend && npm run start -w backend
-    healthCheckPath: /api/v1/docs
+    healthCheckPath: /api/v1/health
     envVars:
+      - key: NODE_VERSION
+        value: "20"
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: "4000"
+      # Do NOT set PORT — Render injects it automatically
       - key: API_PREFIX
         value: /api/v1
       - key: DATABASE_URL
         fromDatabase:
           name: eims-postgres
           property: connectionString
+<<<<<<< Updated upstream
+=======
+      # Redis not required on free tier (app falls back to in-memory)
+      - key: REDIS_URL
+        value: redis://127.0.0.1:6379
+>>>>>>> Stashed changes
       - key: JWT_ACCESS_SECRET
         generateValue: true
       - key: JWT_REFRESH_SECRET
@@ -45,31 +82,50 @@ services:
         value: Enterprise IMS
       - key: EMAIL_ENABLED
         value: "false"
+      - key: SMS_ENABLED
+        value: "false"
+      - key: OAUTH_GOOGLE_ENABLED
+        value: "false"
+      # Allow browser calls until you lock CORS to the real web URL (see header notes)
       - key: CORS_ORIGINS
+<<<<<<< Updated upstream
         value: https://eims-web.onrender.com
+=======
+        value: "*"
+>>>>>>> Stashed changes
       - key: APP_URL
         value: https://eims-web.onrender.com
       - key: API_URL
         value: https://eims-api.onrender.com
       - key: DEFAULT_TENANT_SLUG
         value: demo
+      - key: RATE_LIMIT_MAX
+        value: "200"
 
+<<<<<<< Updated upstream
   # Frontend
+=======
+  # ---------------- Frontend (static Vite build) ----------------
+>>>>>>> Stashed changes
   - type: web
     name: eims-web
     runtime: static
+    # Static sites are free; plan free is valid for type: web
     plan: free
-    rootDir: .
-    buildCommand: npm install && npm run build -w frontend
+    buildCommand: npm install --include=dev && npm run build -w frontend
     staticPublishPath: frontend/dist
     headers:
       - path: /*
         name: X-Frame-Options
         value: SAMEORIGIN
     routes:
+      # SPA client-side routing
       - type: rewrite
         source: /*
         destination: /index.html
     envVars:
+      - key: NODE_VERSION
+        value: "20"
+      # Baked in at build time — update to the real API URL after first API deploy, then rebuild web
       - key: VITE_API_URL
         value: https://eims-api.onrender.com/api/v1

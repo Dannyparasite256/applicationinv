@@ -116,7 +116,17 @@ Beginner guide (push to GitHub, local free hosting, Render/Vercel):
 | Code backup / sharing | GitHub only |
 | Working free public URL | **Render** (`render.yaml` Blueprint) |
 | Frontend-only CDN | Vercel (`vercel.json`) + API elsewhere |
-| Run free on your PC | `npm run dev` or Docker Compose |  
+| Run free on your PC | `npm run dev` or Docker Compose |
+
+### Deploy to Render (free)
+
+1. Push to GitHub: https://github.com/Dannyparasite256/applicationinv  
+2. [dashboard.render.com](https://dashboard.render.com) → **New +** → **Blueprint** → select that repo  
+3. Apply `render.yaml` (creates free Postgres + `eims-api` + `eims-web`)  
+4. After deploy, set real URLs (see guide):
+   - **eims-web** env: `VITE_API_URL=https://YOUR-API.onrender.com/api/v1` → rebuild web  
+   - **eims-api** env: `CORS_ORIGINS` / `APP_URL` / `API_URL` to match real hosts  
+5. Optional seed (API Shell): `npm run db:seed -w backend`  
 
 ## Project structure
 

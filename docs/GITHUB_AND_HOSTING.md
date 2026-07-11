@@ -126,39 +126,90 @@ Why Render for *this* app?
 - Free **static site** for the Vite frontend  
 - This repo includes `render.yaml` so you can use a Blueprint deploy  
 
-**Limits (be aware):** free services **sleep** after idle time (first request can be slow). Free Postgres may have size/time limits — fine for learning and demos, not heavy production.
+**Limits (be aware):**
 
-#### Steps (Blueprint)
+- Free web services **sleep** after ~15 minutes idle (first request can take 30–60s).
+- Free Postgres is **~1 GB** and typically **expires after 30 days** (upgrade or export data before then).
+- No free Redis — this app uses an in-memory fallback (already configured).
 
-1. Push this repo to GitHub (Part B).
-2. Go to [https://render.com](https://render.com) → sign up with GitHub.
-3. **New** → **Blueprint** → select your repo.
-4. Render reads `render.yaml` and creates:
-   - `eims-postgres`
-   - `eims-api`
-   - `eims-web`
-5. After the API is live, open its URL (e.g. `https://eims-api.onrender.com`).
-6. In the **eims-web** service env, set:
+#### Steps (Blueprint) — exact clicks
 
-   ```text
-   VITE_API_URL=https://eims-api.onrender.com/api/v1
-   ```
+1. Push this repo to GitHub (already done for `Dannyparasite256/applicationinv` if you followed Part B).
+2. Open [https://dashboard.render.com](https://dashboard.render.com) and sign up / log in with **GitHub**.
+3. If asked, **grant Render access** to the `applicationinv` repository (or all repos).
+4. Click **New +** → **Blueprint**.
+5. Select **`Dannyparasite256/applicationinv`**.
+6. Confirm the Blueprint path is `render.yaml` (repo root).
+7. Click **Apply** / **Create resources**.
+8. Wait until these three show as live (first deploy can take several minutes):
 
-   Then **Manual Deploy → Clear build cache & deploy**.
-7. In the **eims-api** service env, set:
+   | Resource | Type | Free? |
+   |----------|------|-------|
+   | `eims-postgres` | PostgreSQL | Yes (30-day free DB) |
+   | `eims-api` | Web Service (Node) | Yes |
+   | `eims-web` | Static Site | Yes |
 
-   ```text
-   CORS_ORIGINS=https://eims-web.onrender.com
-   APP_URL=https://eims-web.onrender.com
-   API_URL=https://eims-api.onrender.com
-   ```
+9. **Copy the real URLs** from the Render dashboard (they may include a random suffix, not just `eims-api.onrender.com`):
 
-   Replace hostnames with your real ones, then redeploy the API.
-8. (Optional) Seed demo data: Render dashboard → API service → **Shell**:
+   - API example: `https://eims-api-xxxx.onrender.com`
+   - Web example: `https://eims-web-xxxx.onrender.com`
 
-   ```bash
-   npm run db:seed -w backend
-   ```
+10. **Wire the frontend to the API** (required for login to work):
+
+    - Open **eims-web** → **Environment**
+    - Set `VITE_API_URL` to `https://YOUR-REAL-API-URL/api/v1`
+    - **Manual Deploy** → **Clear build cache & deploy**  
+      (Vite bakes this value in at build time)
+
+11. **Tighten API CORS** (recommended after web URL is known):
+
+    - Open **eims-api** → **Environment**
+    - Set:
+      - `CORS_ORIGINS` = `https://YOUR-REAL-WEB-URL`
+      - `APP_URL` = `https://YOUR-REAL-WEB-URL`
+      - `API_URL` = `https://YOUR-REAL-API-URL`
+    - Save → redeploy API if it does not auto-redeploy
+
+12. **(Optional) Seed demo users** — open **eims-api** → **Shell**:
+
+    ```bash
+    npm run db:seed -w backend
+    ```
+
+    Demo logins after seed:
+
+    | Role | Email | Password |
+    |------|-------|----------|
+    | Company Owner | `admin@demo.local` | `Admin@123` |
+    | Super Admin | `superadmin@ims.local` | `Admin@123` |
+
+13. Open the **eims-web** URL in your browser. First load may be slow while the free API wakes up.
+
+#### Health checks
+
+- API health: `https://YOUR-API-URL/api/v1/health`
+- API docs: `https://YOUR-API-URL/api/v1/docs`
+
+#### If Blueprint is blocked / requires a card
+
+Some workspaces ask for billing verification even for free resources. If Blueprint fails:
+
+1. **New + → PostgreSQL** → name `eims-postgres` → plan **Free** → create  
+2. **New + → Web Service** → connect `applicationinv`  
+   - Name: `eims-api`  
+   - Runtime: Node  
+   - Plan: **Free**  
+   - Build: `npm install --include=dev && npm run db:generate -w backend && npm run build -w backend`  
+   - Start: `npm run db:migrate:deploy -w backend && npm run start -w backend`  
+   - Health check path: `/api/v1/health`  
+   - Env: copy from `render.yaml` / `.env.production.example`  
+   - `DATABASE_URL` → link the free Postgres  
+3. **New + → Static Site** → same repo  
+   - Name: `eims-web`  
+   - Build: `npm install --include=dev && npm run build -w frontend`  
+   - Publish directory: `frontend/dist`  
+   - Env: `VITE_API_URL=https://YOUR-API/api/v1`  
+   - Add rewrite `/*` → `/index.html` for SPA routing
 
 ### Alternative A: GitHub only (no cloud app host)
 
