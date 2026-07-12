@@ -1,4 +1,5 @@
 import { prisma } from '../config/database';
+import { env } from '../config/env';
 import { ForbiddenError, NotFoundError, ValidationError } from '../utils/errors';
 import { logger } from '../utils/logger';
 
@@ -71,7 +72,25 @@ async function fetchJson(url: string, timeoutMs = 7000): Promise<unknown> {
 }
 
 /**
- * Fetch live mid-market rates from Frankfurter (ECB) + open.er-api fallback.
+ * Invert provider rates: provider returns units of `code` per 1 `base`.
+ * App stores: units of `base` per 1 `code` (amountBase = amountForeign * rate).
+ */
+function invertProviderRates(
+  baseCode: string,
+  providerRates: Record<string, number>
+): Record<string, number> {
+  const inverted: Record<string, number> = { [baseCode]: 1 };
+  for (const [code, r] of Object.entries(providerRates)) {
+    if (typeof r === 'number' && r > 0) inverted[code.toUpperCase()] = 1 / r;
+  }
+  inverted[baseCode] = 1;
+  return inverted;
+}
+
+/**
+ * Fetch live mid-market rates.
+ * Primary: ExchangeRate-API.com (requires EXCHANGE_RATE_API_KEY)
+ * Fallbacks: open.er-api.com, Frankfurter (ECB)
  * Returns map: currencyCode → units of `base` per 1 unit of currencyCode
  * i.e. amountBase = amountForeign * rate
  */
@@ -82,32 +101,47 @@ export async function fetchLiveRates(base: string): Promise<{
   source: string;
 }> {
   const baseCode = base.toUpperCase();
+  const apiKey = (env.EXCHANGE_RATE_API_KEY || process.env.EXCHANGE_RATE_API_KEY || '').trim();
 
-  // 1) Frankfurter (free, no key) — ECB data. Only major ISO pairs (not UGX etc.)
-  try {
-    const url = `https://api.frankfurter.app/latest?from=${encodeURIComponent(baseCode)}`;
-    const data = (await fetchJson(url)) as {
-      base: string;
-      date: string;
-      rates: Record<string, number>;
-    };
-    if (data?.rates) {
-      const inverted: Record<string, number> = { [baseCode]: 1 };
-      for (const [code, r] of Object.entries(data.rates)) {
-        if (r > 0) inverted[code] = 1 / r;
-      }
-      return {
-        base: baseCode,
-        date: data.date || new Date().toISOString().slice(0, 10),
-        rates: inverted,
-        source: 'frankfurter.app (ECB)',
+  // 1) ExchangeRate-API.com (authenticated) — broad coverage incl. UGX, KES, etc.
+  if (apiKey) {
+    try {
+      const url = `https://v6.exchangerate-api.com/v6/${encodeURIComponent(apiKey)}/latest/${encodeURIComponent(baseCode)}`;
+      const data = (await fetchJson(url, 12_000)) as {
+        result?: string;
+        'error-type'?: string;
+        base_code?: string;
+        time_last_update_utc?: string;
+        conversion_rates?: Record<string, number>;
+        rates?: Record<string, number>;
       };
+      if (data?.result === 'success') {
+        const raw = data.conversion_rates || data.rates;
+        if (raw && Object.keys(raw).length > 0) {
+          return {
+            base: baseCode,
+            date: data.time_last_update_utc || new Date().toISOString(),
+            rates: invertProviderRates(baseCode, raw),
+            source: 'exchangerate-api.com',
+          };
+        }
+      }
+      logger.warn('ExchangeRate-API non-success response', {
+        result: data?.result,
+        error: data?.['error-type'],
+        base: baseCode,
+      });
+    } catch (e) {
+      logger.warn('ExchangeRate-API FX fetch failed', {
+        e: e instanceof Error ? e.message : e,
+        base: baseCode,
+      });
     }
-  } catch (e) {
-    logger.warn('Frankfurter FX fetch failed', { e: e instanceof Error ? e.message : e, base: baseCode });
+  } else {
+    logger.warn('EXCHANGE_RATE_API_KEY not set — using free FX fallbacks only');
   }
 
-  // 2) open.er-api.com (free, no key) — broader currency coverage
+  // 2) open.er-api.com (free, no key) — same provider network, open access
   try {
     const url = `https://open.er-api.com/v6/latest/${encodeURIComponent(baseCode)}`;
     const data = (await fetchJson(url)) as {
@@ -117,14 +151,10 @@ export async function fetchLiveRates(base: string): Promise<{
       rates: Record<string, number>;
     };
     if (data?.result === 'success' && data.rates) {
-      const inverted: Record<string, number> = { [baseCode]: 1 };
-      for (const [code, r] of Object.entries(data.rates)) {
-        if (r > 0) inverted[code] = 1 / r;
-      }
       return {
         base: baseCode,
         date: data.time_last_update_utc || new Date().toISOString(),
-        rates: inverted,
+        rates: invertProviderRates(baseCode, data.rates),
         source: 'open.er-api.com',
       };
     }
@@ -132,7 +162,27 @@ export async function fetchLiveRates(base: string): Promise<{
     logger.warn('open.er-api FX fetch failed', { e: e instanceof Error ? e.message : e, base: baseCode });
   }
 
-  // 3) Fallback: USD hub — convert via USD when base is exotic / offline partial
+  // 3) Frankfurter (free, no key) — ECB majors only
+  try {
+    const url = `https://api.frankfurter.app/latest?from=${encodeURIComponent(baseCode)}`;
+    const data = (await fetchJson(url)) as {
+      base: string;
+      date: string;
+      rates: Record<string, number>;
+    };
+    if (data?.rates) {
+      return {
+        base: baseCode,
+        date: data.date || new Date().toISOString().slice(0, 10),
+        rates: invertProviderRates(baseCode, data.rates),
+        source: 'frankfurter.app (ECB)',
+      };
+    }
+  } catch (e) {
+    logger.warn('Frankfurter FX fetch failed', { e: e instanceof Error ? e.message : e, base: baseCode });
+  }
+
+  // 4) Fallback: USD hub — convert via USD when base is exotic / offline partial
   if (baseCode !== 'USD') {
     try {
       const usd = await fetchLiveRates('USD');
@@ -157,7 +207,11 @@ export async function fetchLiveRates(base: string): Promise<{
     }
   }
 
-  throw new ValidationError('Unable to fetch live exchange rates. Check internet and try again.');
+  throw new ValidationError(
+    apiKey
+      ? 'Unable to fetch live exchange rates. Check EXCHANGE_RATE_API_KEY and internet, then try again.'
+      : 'Unable to fetch live exchange rates. Set EXCHANGE_RATE_API_KEY or check internet and try again.'
+  );
 }
 
 /** Popular currencies always available in the company picker (rates filled by refresh). */

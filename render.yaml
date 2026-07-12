@@ -77,6 +77,9 @@ services:
         value: demo
       - key: RATE_LIMIT_MAX
         value: "200"
+      # Live FX rates — ExchangeRate-API.com standard endpoint
+      - key: EXCHANGE_RATE_API_KEY
+        value: "939fd232d3295a38dbcecc13"
 
   # ---------------- Frontend (static Vite build) ----------------
   # NOTE: static sites must NOT include plan/region (schema rejects them)

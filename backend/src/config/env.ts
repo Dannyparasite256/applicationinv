@@ -62,6 +62,9 @@ const envSchema = z.object({
 
   CORS_ORIGINS: z.string().default('http://localhost:5173'),
   DEFAULT_TENANT_SLUG: z.string().default('demo'),
+
+  /** ExchangeRate-API.com key — https://v6.exchangerate-api.com/v6/{KEY}/latest/{BASE} */
+  EXCHANGE_RATE_API_KEY: z.string().optional().default(''),
 });
 
 const parsed = envSchema.safeParse(process.env);
