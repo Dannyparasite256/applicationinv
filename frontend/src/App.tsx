@@ -29,6 +29,8 @@ import { ProfilePage } from '@/pages/settings/ProfilePage';
 import { CurrencyPage } from '@/pages/settings/CurrencyPage';
 import { AddStaffPage } from '@/pages/settings/AddStaffPage';
 import { PlatformAdminPage } from '@/pages/admin/PlatformAdminPage';
+import { PlatformBusinessesPage } from '@/pages/admin/PlatformBusinessesPage';
+import { PlatformBusinessDetailPage } from '@/pages/admin/PlatformBusinessDetailPage';
 import { StaffPage } from '@/pages/admin/StaffPage';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import { useAuthStore } from '@/stores/authStore';
@@ -112,6 +114,8 @@ export default function App() {
             <Route path="/app" element={<AppLayout />}>
               <Route index element={<Guard><DashboardPage /></Guard>} />
               <Route path="platform" element={<Guard><PlatformAdminPage /></Guard>} />
+              <Route path="platform/businesses" element={<Guard><PlatformBusinessesPage /></Guard>} />
+              <Route path="platform/businesses/:id" element={<Guard><PlatformBusinessDetailPage /></Guard>} />
               <Route path="staff" element={<Guard><StaffPage /></Guard>} />
               <Route path="pos" element={<Guard><PosPage /></Guard>} />
               <Route path="products" element={<Guard><ProductsPage /></Guard>} />
