@@ -90,7 +90,7 @@ export function Topbar({ onMenuClick }: TopbarProps) {
         </Button>
 
         {/* Mobile brand — shrinks on narrow screens so actions stay visible */}
-        <div className="flex items-center gap-1.5 lg:hidden min-w-0 overflow-hidden max-w-[38vw] xs:max-w-[42vw] shrink">
+        <div className="flex items-center gap-1.5 lg:hidden min-w-0 flex-1 overflow-hidden max-w-[42vw] xs:max-w-none">
           <div className="brand-mark h-8 w-8 sm:h-8 sm:w-8 text-[10px] shrink-0">
             {companyLogo ? (
               <img src={companyLogo} alt="" className="h-full w-full object-cover" />
@@ -105,8 +105,8 @@ export function Topbar({ onMenuClick }: TopbarProps) {
           </div>
         </div>
 
-        {/* Search + actions cluster (search expands on desktop, icon on mobile) */}
-        <div className="ml-auto flex flex-1 items-center justify-end gap-0.5 sm:gap-1 min-w-0">
+        {/* Actions: search opens only after tapping the icon */}
+        <div className="ml-auto flex items-center gap-0.5 sm:gap-1 shrink-0 min-w-0">
           <GlobalSearch />
           <div className="relative flex items-center gap-0.5 rounded-lg border border-border bg-muted/40 px-1.5 sm:px-2 h-9 sm:h-8 min-h-[2.25rem] shrink-0">
             <Coins className="h-3.5 w-3.5 text-primary shrink-0" />
