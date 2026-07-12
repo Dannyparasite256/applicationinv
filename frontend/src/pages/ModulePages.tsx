@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+﻿import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
@@ -115,7 +115,7 @@ async function downloadAuth(path: string, filename: string) {
 function openPdf(path: string) {
   const token = useAuthStore.getState().accessToken;
   const base = getApiBaseUrl();
-  // Authenticated fetch + blob URL (do not open the API URL bare — auth header is required)
+  // Authenticated fetch + blob URL (do not open the API URL bare â€” auth header is required)
   fetch(`${base}${path}`, { headers: { Authorization: `Bearer ${token}` } })
     .then((r) => {
       if (!r.ok) throw new Error('PDF request failed');
@@ -129,8 +129,8 @@ function openPdf(path: string) {
     .catch(() => toast.error('Could not open PDF'));
 }
 
-// ═══════════════════ SALES ═══════════════════
-/** After refund/delete/charge — refresh every surface that shows sales or money. */
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• SALES â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/** After refund/delete/charge â€” refresh every surface that shows sales or money. */
 function invalidateAfterSaleChange(qc: ReturnType<typeof useQueryClient>) {
   const keys = [
     'sales',
@@ -175,7 +175,7 @@ export function SalesPage() {
     mutationFn: async (id: string) =>
       api.post(`/sales/${id}/refund`, { reason: 'Customer return' }),
     onSuccess: () => {
-      toast.success('Sale refunded — stock & totals updated');
+      toast.success('Sale refunded â€” stock & totals updated');
       invalidateAfterSaleChange(qc);
       void refetch();
     },
@@ -185,9 +185,9 @@ export function SalesPage() {
   const remove = useMutation({
     // POST /void is more reliable than DELETE on some mobile WebViews / proxies
     mutationFn: async (id: string) =>
-      api.post(`/sales/${id}/void`, { reason: 'Mistake — deleted by user' }),
+      api.post(`/sales/${id}/void`, { reason: 'Mistake â€” deleted by user' }),
     onSuccess: () => {
-      toast.success('Sale deleted — inventory restored');
+      toast.success('Sale deleted â€” inventory restored');
       invalidateAfterSaleChange(qc);
       void refetch();
     },
@@ -201,8 +201,8 @@ export function SalesPage() {
       title="Sales"
       description={
         canReverseSales
-          ? 'POS transactions — refund, delete mistakes, print & share'
-          : 'POS transactions — print & share (refund/delete: managers only)'
+          ? 'POS transactions â€” refund, delete mistakes, print & share'
+          : 'POS transactions â€” print & share (refund/delete: managers only)'
       }
       action={
         <div className="flex gap-2">
@@ -232,7 +232,7 @@ export function SalesPage() {
         />
       )}
       {isLoading ? (
-        <p className="text-muted-foreground">Loading sales…</p>
+        <p className="text-muted-foreground">Loading salesâ€¦</p>
       ) : rows.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center space-y-3">
@@ -315,7 +315,7 @@ export function SalesPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        title="Customer return — restore stock"
+                        title="Customer return â€” restore stock"
                         loading={refund.isPending}
                         onClick={() => {
                           if (
@@ -332,12 +332,12 @@ export function SalesPage() {
                       <Button
                         size="sm"
                         variant="destructive"
-                        title="Delete this sale (mistake) — restores stock"
+                        title="Delete this sale (mistake) â€” restores stock"
                         loading={remove.isPending}
                         onClick={() => {
                           if (
                             window.confirm(
-                              `Delete sale ${s.saleNo}?\n\nUse this when you made a mistake.\n• Stock is restored\n• Sale is removed from the list`
+                              `Delete sale ${s.saleNo}?\n\nUse this when you made a mistake.\nâ€¢ Stock is restored\nâ€¢ Sale is removed from the list`
                             )
                           ) {
                             remove.mutate(s.id);
@@ -366,7 +366,7 @@ export function SalesPage() {
   );
 }
 
-// ═══════════════════ CUSTOMERS ═══════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• CUSTOMERS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 export function CustomersPage() {
   const [form, setForm] = useState({ firstName: '', lastName: '', phone: '', email: '' });
   const [show, setShow] = useState(false);
@@ -435,8 +435,8 @@ export function CustomersPage() {
           }) => [
             c.code,
             c.businessName || `${c.firstName || ''} ${c.lastName || ''}`.trim(),
-            c.phone || '—',
-            c.email || '—',
+            c.phone || 'â€”',
+            c.email || 'â€”',
             formatCurrency(Number(c.balance)),
             String(c.loyaltyPoints),
           ]
@@ -446,7 +446,7 @@ export function CustomersPage() {
   );
 }
 
-// ═══════════════════ SUPPLIERS ═══════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• SUPPLIERS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 export function SuppliersPage() {
   const [show, setShow] = useState(false);
   const [form, setForm] = useState({ name: '', phone: '', email: '', contactPerson: '' });
@@ -493,8 +493,8 @@ export function SuppliersPage() {
         rows={(data?.data || []).map((s: { code: string; name: string; email?: string; phone?: string; balance: number }) => [
           s.code,
           s.name,
-          s.email || '—',
-          s.phone || '—',
+          s.email || 'â€”',
+          s.phone || 'â€”',
           formatCurrency(Number(s.balance)),
         ])}
       />
@@ -502,7 +502,7 @@ export function SuppliersPage() {
   );
 }
 
-// ═══════════════════ PURCHASES ═══════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• PURCHASES â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 export function PurchasesPage() {
   const qc = useQueryClient();
   const [show, setShow] = useState(false);
@@ -559,7 +559,7 @@ export function PurchasesPage() {
         (await api.get('/warehouses')).data?.data?.[0]?.id;
       if (!wh) throw new Error('No warehouse configured. Create one under Settings first.');
 
-      // List payload may omit items — always load full PO when needed
+      // List payload may omit items â€” always load full PO when needed
       let lines = Array.isArray(po.items) ? po.items : [];
       if (!lines.length) {
         const full = await api.get(`/purchases/${po.id}`);
@@ -585,8 +585,8 @@ export function PurchasesPage() {
       const status = res.data?.data?.status;
       toast.success(
         status === 'RECEIVED'
-          ? 'Goods fully received — stock updated'
-          : 'Partial receipt recorded — stock updated'
+          ? 'Goods fully received â€” stock updated'
+          : 'Partial receipt recorded â€” stock updated'
       );
       qc.invalidateQueries({ queryKey: ['purchases'] });
       qc.invalidateQueries({ queryKey: ['products'] });
@@ -649,7 +649,7 @@ export function PurchasesPage() {
             items?: Array<{ id: string; quantity: number; receivedQty: number }>;
           }) => [
             p.orderNo,
-            p.supplier?.name || '—',
+            p.supplier?.name || 'â€”',
             formatCurrency(Number(p.total)),
             <Badge key="s" variant={p.status === 'RECEIVED' ? 'success' : 'secondary'}>
               {p.status}
@@ -660,7 +660,7 @@ export function PurchasesPage() {
                 Receive
               </Button>
             ) : (
-              '—'
+              'â€”'
             ),
           ]
         )}
@@ -669,7 +669,7 @@ export function PurchasesPage() {
   );
 }
 
-// ═══════════════════ INVENTORY ═══════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• INVENTORY â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 export function InventoryPage() {
   const qc = useQueryClient();
   const [adjProduct, setAdjProduct] = useState('');
@@ -815,7 +815,7 @@ export function InventoryPage() {
                 </Badge>,
                 String(Number(m.quantity)),
                 m.warehouse.name,
-                m.reference || '—',
+                m.reference || 'â€”',
               ]
             )}
           />
@@ -825,7 +825,7 @@ export function InventoryPage() {
   );
 }
 
-// ═══════════════════ INVOICES ═══════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• INVOICES â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 type InvoiceLineDraft = {
   key: string;
   description: string;
@@ -987,7 +987,7 @@ export function InvoicesPage() {
         .filter((l) => l.description.trim())
         .map((l) => {
           const quantity = parseFloat(l.quantity) || 0;
-          // Prices typed in display currency → company base for API
+          // Prices typed in display currency â†’ company base for API
           const unitPrice = parseMoneyToBase(l.unitPrice);
           const taxRate = parseFloat(l.taxRate) || 0;
           return {
@@ -1123,13 +1123,13 @@ export function InvoicesPage() {
       {/* KPIs */}
       <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 min-w-0">
         {[
-          { label: 'All invoices', value: summary?.total ?? '—' },
-          { label: 'Unpaid', value: summary?.unpaid ?? '—', tone: 'text-warning' },
-          { label: 'Partial', value: summary?.partial ?? '—' },
-          { label: 'Paid', value: summary?.paid ?? '—', tone: 'text-success' },
+          { label: 'All invoices', value: summary?.total ?? 'â€”' },
+          { label: 'Unpaid', value: summary?.unpaid ?? 'â€”', tone: 'text-warning' },
+          { label: 'Partial', value: summary?.partial ?? 'â€”' },
+          { label: 'Paid', value: summary?.paid ?? 'â€”', tone: 'text-success' },
           {
             label: 'Outstanding',
-            value: summary ? formatCurrency(summary.outstanding) : '—',
+            value: summary ? formatCurrency(summary.outstanding) : 'â€”',
             tone: 'text-primary',
           },
         ].map((k) => (
@@ -1289,7 +1289,7 @@ export function InvoicesPage() {
                         disabled={lines.length <= 1}
                         onClick={() => setLines((prev) => prev.filter((_, i) => i !== idx))}
                       >
-                        ✕
+                        âœ•
                       </Button>
                     </div>
                   </div>
@@ -1300,8 +1300,8 @@ export function InvoicesPage() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-border bg-card p-3">
               <div className="text-sm space-y-0.5">
                 <p className="text-muted-foreground">
-                  Subtotal {formatCurrency(linePreview.sub)} · Tax {formatCurrency(linePreview.tax)}
-                  {linePreview.disc > 0 ? ` · Discount −${formatCurrency(linePreview.disc)}` : ''}
+                  Subtotal {formatCurrency(linePreview.sub)} Â· Tax {formatCurrency(linePreview.tax)}
+                  {linePreview.disc > 0 ? ` Â· Discount âˆ’${formatCurrency(linePreview.disc)}` : ''}
                 </p>
                 <p className="text-lg font-bold text-primary tabular-nums">
                   Total {formatCurrency(linePreview.total)}
@@ -1330,11 +1330,11 @@ export function InvoicesPage() {
               value={fromSaleId}
               onChange={(e) => setFromSaleId(e.target.value)}
             >
-              <option value="">Select a recent sale…</option>
+              <option value="">Select a recent saleâ€¦</option>
               {(recentSales || []).map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.saleNo} · {formatCurrency(Number(s.total))}
-                  {s.customer?.businessName ? ` · ${s.customer.businessName}` : ''}
+                  {s.saleNo} Â· {formatCurrency(Number(s.total))}
+                  {s.customer?.businessName ? ` Â· ${s.customer.businessName}` : ''}
                 </option>
               ))}
             </select>
@@ -1353,7 +1353,7 @@ export function InvoicesPage() {
       <div className="flex flex-col sm:flex-row gap-2">
         <Input
           className="sm:max-w-xs"
-          placeholder="Search invoice #, customer, notes…"
+          placeholder="Search invoice #, customer, notesâ€¦"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -1374,7 +1374,7 @@ export function InvoicesPage() {
         {/* List */}
         <div className="xl:col-span-3 space-y-3">
           {isLoading ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">Loading invoices…</p>
+            <p className="text-sm text-muted-foreground py-8 text-center">Loading invoicesâ€¦</p>
           ) : rows.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center space-y-2">
@@ -1417,9 +1417,9 @@ export function InvoicesPage() {
                         <p className="text-xs text-muted-foreground mt-0.5">
                           {inv.issuedAt || inv.createdAt
                             ? formatDate((inv.issuedAt || inv.createdAt) as string)
-                            : '—'}
-                          {inv.dueDate ? ` · Due ${formatDate(inv.dueDate)}` : ''}
-                          {inv._count?.items != null ? ` · ${inv._count.items} lines` : ''}
+                            : 'â€”'}
+                          {inv.dueDate ? ` Â· Due ${formatDate(inv.dueDate)}` : ''}
+                          {inv._count?.items != null ? ` Â· ${inv._count.items} lines` : ''}
                         </p>
                       </div>
                       <div className="text-right shrink-0">
@@ -1471,7 +1471,7 @@ export function InvoicesPage() {
                 </p>
               )}
               {selectedId && loadingDetail && (
-                <p className="text-sm text-muted-foreground">Loading…</p>
+                <p className="text-sm text-muted-foreground">Loadingâ€¦</p>
               )}
               {detail && (
                 <>
@@ -1496,7 +1496,7 @@ export function InvoicesPage() {
                       <strong>
                         {detail.customer?.businessName ||
                           `${detail.customer?.firstName || ''} ${detail.customer?.lastName || ''}`.trim() ||
-                          '—'}
+                          'â€”'}
                       </strong>
                     </p>
                     {detail.customer?.phone && (
@@ -1557,7 +1557,7 @@ export function InvoicesPage() {
                     {Number(detail.discountAmount || 0) > 0 && (
                       <div className="flex justify-between text-muted-foreground">
                         <span>Discount</span>
-                        <span>−{formatCurrency(Number(detail.discountAmount))}</span>
+                        <span>âˆ’{formatCurrency(Number(detail.discountAmount))}</span>
                       </div>
                     )}
                     <div className="flex justify-between font-bold text-base">
@@ -1585,7 +1585,7 @@ export function InvoicesPage() {
                           >
                             <span>
                               {p.method.replace(/_/g, ' ')}
-                              {p.reference ? ` · ${p.reference}` : ''}
+                              {p.reference ? ` Â· ${p.reference}` : ''}
                             </span>
                             <span className="tabular-nums font-medium">
                               {formatCurrency(Number(p.amount))}
@@ -1717,7 +1717,7 @@ export function InvoicesPage() {
   );
 }
 
-// ═══════════════════ HOSPITAL ═══════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• HOSPITAL â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 export function HospitalPage() {
   const [form, setForm] = useState({ firstName: '', lastName: '', phone: '', gender: 'UNKNOWN' });
   const qc = useQueryClient();
@@ -1761,11 +1761,11 @@ export function HospitalPage() {
         rows={(data?.data || []).map((p: { patientNo: string; firstName: string; lastName: string; phone?: string; type: string; bloodGroup?: string }) => [
           p.patientNo,
           `${p.firstName} ${p.lastName}`,
-          p.phone || '—',
+          p.phone || 'â€”',
           <Badge key="t" variant="secondary">
             {p.type}
           </Badge>,
-          p.bloodGroup || '—',
+          p.bloodGroup || 'â€”',
         ])}
       />
     </PageShell>
@@ -1791,7 +1791,7 @@ export function PharmacyPage() {
               Rx
             </Badge>
           ) : (
-            '—'
+            'â€”'
           ),
         ])}
       />
@@ -1811,7 +1811,7 @@ export function LaboratoryPage() {
         rows={(data?.data || []).map(
           (o: { orderNo: string; status: string; priority: string; orderedAt: string; patient?: { firstName: string; lastName: string } }) => [
             o.orderNo,
-            o.patient ? `${o.patient.firstName} ${o.patient.lastName}` : '—',
+            o.patient ? `${o.patient.firstName} ${o.patient.lastName}` : 'â€”',
             <Badge key="s">{o.status}</Badge>,
             o.priority,
             formatDate(o.orderedAt),
@@ -1905,7 +1905,7 @@ export function HrPage() {
         rows={(data?.data || []).map((e: { employeeNo: string; firstName: string; lastName: string; position?: string; status: string }) => [
           e.employeeNo,
           `${e.firstName} ${e.lastName}`,
-          e.position || '—',
+          e.position || 'â€”',
           <Badge key="s" variant={e.status === 'ACTIVE' ? 'success' : 'secondary'}>
             {e.status}
           </Badge>,
@@ -1915,7 +1915,7 @@ export function HrPage() {
   );
 }
 
-// ═══════════════════ REPORTS ═══════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• REPORTS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 export function ReportsPage() {
   const reports = [
     { name: 'Sales Report', desc: 'All sales with totals', excel: '/reports/sales.xlsx', csv: '/reports/sales.csv', view: '/reports/sales' },
@@ -1938,7 +1938,7 @@ export function ReportsPage() {
   };
 
   return (
-    <PageShell title="Reports" description="Live reports — export Excel, CSV, or print">
+    <PageShell title="Reports" description="Live reports â€” export Excel, CSV, or print">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {reports.map((r) => (
           <Card key={r.name} className="hover:border-primary/50 transition-colors">
@@ -2000,624 +2000,6 @@ export function ReportsPage() {
   );
 }
 
-// ═══════════════════ SETTINGS ═══════════════════
-export function SettingsPage() {
-  const qc = useQueryClient();
-  const setUser = useAuthStore((s) => s.setUser);
-  const authUser = useAuthStore((s) => s.user);
-  const fontId = useThemeStore((s) => s.fontId);
-  const theme = useThemeStore((s) => s.theme);
-  const setTheme = useThemeStore((s) => s.setTheme);
-  const logoInputRef = useRef<HTMLInputElement>(null);
-  const currentFontLabel = APP_FONTS.find((f) => f.id === fontId)?.label || 'Phone system font';
-  const { data } = useQuery({
-    queryKey: ['company'],
-    queryFn: async () => (await api.get('/company')).data.data,
-  });
-  const { data: users } = useQuery({
-    queryKey: ['users'],
-    queryFn: async () => (await api.get('/users')).data,
-  });
-  const { data: notifications } = useQuery({
-    queryKey: ['notifications'],
-    queryFn: async () => (await api.get('/notifications')).data.data,
-  });
 
-  const confirmStaff = useMutation({
-    mutationFn: async (id: string) => api.post(`/users/${id}/approve`),
-    onSuccess: () => {
-      toast.success('Staff confirmed — they can login now');
-      qc.invalidateQueries({ queryKey: ['users'] });
-      qc.invalidateQueries({ queryKey: ['staff-pending'] });
-      qc.invalidateQueries({ queryKey: ['staff-pending-count'] });
-      qc.invalidateQueries({ queryKey: ['notifications'] });
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
-  const [profile, setProfile] = useState({ name: '', phone: '', email: '', address: '', currency: 'USD' });
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [userForm, setUserForm] = useState({
-    email: '',
-    password: 'Cashier@123',
-    firstName: '',
-    lastName: '',
-    roleCode: 'CASHIER',
-  });
-  const [branchForm, setBranchForm] = useState({ code: '', name: '' });
-  const [addCurrencyCode, setAddCurrencyCode] = useState('EUR');
-
-  const { data: currencyData, refetch: refetchCurrencies } = useQuery({
-    queryKey: ['currencies'],
-    queryFn: async () => (await api.get('/currencies')).data.data as {
-      baseCurrency: string;
-      currencies: Array<{
-        code: string;
-        name: string;
-        symbol: string;
-        exchangeRate: number;
-        /** Units of this code per 1 base (ExchangeRate-API style) */
-        marketRate?: number;
-        isBase: boolean;
-        isActive: boolean;
-        lastSyncedAt?: string | null;
-      }>;
-      catalog: Array<{ code: string; name: string; symbol: string }>;
-      liveSource?: string | null;
-      liveDate?: string | null;
-    },
-  });
-
-  useEffect(() => {
-    if (data) {
-      setProfile({
-        name: data.name || '',
-        phone: data.phone || '',
-        email: data.email || '',
-        address: data.address || '',
-        currency: data.currency || 'USD',
-      });
-      setLogoPreview(getMediaUrl(data.logoUrl));
-    }
-  }, [data]);
-
-  const saveCompany = useMutation({
-    mutationFn: async () => api.put('/company', profile),
-    onSuccess: (res) => {
-      toast.success('Company profile saved');
-      qc.invalidateQueries({ queryKey: ['company'] });
-      qc.invalidateQueries({ queryKey: ['currencies'] });
-      const c = res.data?.data;
-      if (authUser && c) {
-        setUser({
-          ...authUser,
-          company: {
-            id: c.id,
-            name: c.name,
-            slug: c.slug,
-            logoUrl: c.logoUrl,
-            currency: c.currency,
-          },
-        });
-      }
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
-  const uploadLogo = useMutation({
-    mutationFn: async (file: File) => {
-      const form = new FormData();
-      form.append('logo', file);
-      return api.post('/company/logo', form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-    },
-    onSuccess: (res) => {
-      const c = res.data?.data;
-      toast.success('Business logo updated');
-      setLogoPreview(getMediaUrl(c?.logoUrl));
-      qc.invalidateQueries({ queryKey: ['company'] });
-      if (authUser && c) {
-        setUser({
-          ...authUser,
-          company: {
-            id: c.id,
-            name: c.name,
-            slug: c.slug,
-            logoUrl: c.logoUrl,
-            currency: c.currency,
-          },
-        });
-      }
-    },
-    onError: (e) => toast.error(getErrorMessage(e) || 'Logo upload failed'),
-  });
-
-  const refreshFx = useMutation({
-    mutationFn: async () => (await api.post('/currencies/refresh')).data.data,
-    onSuccess: (d) => {
-      toast.success(`Live rates updated${d?.liveSource ? ` · ${d.liveSource}` : ''}`);
-      // Push into app-wide currency store so POS/top-bar convert immediately
-      if (d?.baseCurrency && d?.currencies) {
-        useCurrencyStore.getState().setFromApi({
-          baseCurrency: d.baseCurrency,
-          currencies: d.currencies,
-          liveSource: d.liveSource,
-        });
-      }
-      qc.invalidateQueries({ queryKey: ['currencies'] });
-      void refetchCurrencies();
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
-  const addCurrency = useMutation({
-    mutationFn: async () => api.post('/currencies', { code: addCurrencyCode }),
-    onSuccess: () => {
-      toast.success(`${addCurrencyCode} enabled with live rate`);
-      qc.invalidateQueries({ queryKey: ['currencies'] });
-      void refetchCurrencies();
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
-  const createUser = useMutation({
-    mutationFn: async () => api.post('/users', userForm),
-    onSuccess: (res) => {
-      const pending = res.data?.data?.pendingApproval;
-      toast.success(
-        pending
-          ? 'Staff added — pending approval (see Staff & Approvals)'
-          : 'User created'
-      );
-      qc.invalidateQueries({ queryKey: ['users'] });
-      qc.invalidateQueries({ queryKey: ['staff-pending'] });
-      qc.invalidateQueries({ queryKey: ['staff-pending-count'] });
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
-  const createBranch = useMutation({
-    mutationFn: async () => api.post('/branches', branchForm),
-    onSuccess: () => {
-      toast.success('Branch created');
-      qc.invalidateQueries({ queryKey: ['company'] });
-      qc.invalidateQueries({ queryKey: ['branches'] });
-    },
-    onError: (e) => toast.error(getErrorMessage(e)),
-  });
-
-  return (
-    <PageShell
-      title="Settings"
-      description="Brand your business, manage team, currencies & preferences"
-    >
-      {/* Appearance — theme here; fonts open their own screen */}
-      <Card className="lg:col-span-2">
-        <CardHeader>
-          <CardTitle className="text-base">Appearance</CardTitle>
-          <CardDescription>Theme and app font</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <p className="text-sm font-medium mb-2">Theme</p>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant={theme === 'light' ? 'default' : 'outline'}
-                onClick={() => setTheme('light')}
-              >
-                Light
-              </Button>
-              <Button
-                size="sm"
-                variant={theme === 'dark' ? 'default' : 'outline'}
-                onClick={() => setTheme('dark')}
-              >
-                Dark
-              </Button>
-            </div>
-          </div>
-
-          <Link
-            to="/app/settings/fonts"
-            className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-3.5 py-3.5 hover:bg-muted/40 transition-colors min-h-[3.25rem]"
-          >
-            <div className="min-w-0 flex items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/12 text-primary">
-                <Type className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold">Fonts</p>
-                <p className="text-xs text-muted-foreground truncate">
-                  Current: {currentFontLabel} · tap to choose
-                </p>
-              </div>
-            </div>
-            <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
-          </Link>
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-5 lg:grid-cols-2">
-        <Card className="overflow-hidden lg:col-span-2 border-primary/15">
-          <div className="h-24 md:h-28 bg-brand-gradient relative">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_50%,rgba(255,255,255,0.2),transparent_50%)]" />
-            <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-card to-transparent" />
-          </div>
-          <CardContent className="pt-0 -mt-12 relative space-y-5">
-            <div className="flex flex-col sm:flex-row sm:items-end gap-4">
-              <div className="relative group">
-                <div className="brand-mark h-24 w-24 text-2xl ring-4 ring-card shadow-elevated">
-                  {logoPreview ? (
-                    <img src={logoPreview} alt="Business logo" className="h-full w-full object-cover" />
-                  ) : (
-                    brandInitials(profile.name || data?.name)
-                  )}
-                </div>
-                <button
-                  type="button"
-                  className="absolute -bottom-1 -right-1 flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-glow hover:scale-105 transition-transform"
-                  title="Upload business logo"
-                  onClick={() => logoInputRef.current?.click()}
-                >
-                  <Camera className="h-4 w-4" />
-                </button>
-                <input
-                  ref={logoInputRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp,image/gif"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    if (file.size > 8 * 1024 * 1024) {
-                      toast.error('Image must be under 8 MB');
-                      return;
-                    }
-                    const local = URL.createObjectURL(file);
-                    setLogoPreview(local);
-                    uploadLogo.mutate(file);
-                    e.target.value = '';
-                  }}
-                />
-              </div>
-              <div className="flex-1 min-w-0 pb-1">
-                <p className="section-label mb-1">Business branding</p>
-                <h2 className="text-xl font-bold font-display truncate">
-                  {profile.name || data?.name || 'Your business'}
-                </h2>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  Profile picture appears in the sidebar, top bar, and branded documents.
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    loading={uploadLogo.isPending}
-                    onClick={() => logoInputRef.current?.click()}
-                  >
-                    <ImagePlus className="h-4 w-4" />
-                    {logoPreview ? 'Change logo' : 'Add logo'}
-                  </Button>
-                  <Badge variant="secondary" className="h-8 px-3">
-                    {data?.status || '—'} · {data?.slug || 'workspace'}
-                  </Badge>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Building2 className="h-4 w-4 text-primary" />
-              Company profile
-            </CardTitle>
-            <CardDescription>Legal name, contact, and accounting base currency</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Business name</label>
-              <Input
-                placeholder="Company name"
-                value={profile.name}
-                onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Email</label>
-              <Input
-                placeholder="Email"
-                value={profile.email}
-                onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Phone</label>
-              <Input
-                placeholder="Phone"
-                value={profile.phone}
-                onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Address</label>
-              <Input
-                placeholder="Address"
-                value={profile.address}
-                onChange={(e) => setProfile({ ...profile, address: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                Base currency (accounting)
-              </label>
-              <select
-                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
-                value={profile.currency}
-                onChange={(e) => setProfile({ ...profile, currency: e.target.value })}
-              >
-                {(currencyData?.catalog || [{ code: 'USD', name: 'US Dollar' }]).map((c) => (
-                  <option key={c.code} value={c.code}>
-                    {c.code} — {c.name}
-                  </option>
-                ))}
-              </select>
-              <p className="text-[11px] text-muted-foreground mt-1">
-                Changing base rebases FX rates across POS, invoices, and reports.
-              </p>
-            </div>
-            <Button className="w-full sm:w-auto" loading={saveCompany.isPending} onClick={() => saveCompany.mutate()}>
-              Save company profile
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between gap-2">
-            <div>
-              <CardTitle className="text-base">Currencies & live FX rates</CardTitle>
-              <CardDescription>
-                Base: <strong>{currencyData?.baseCurrency || profile.currency}</strong>
-                {currencyData?.liveSource ? (
-                  <>
-                    {' '}
-                    · Source: <strong>{currencyData.liveSource}</strong>
-                  </>
-                ) : null}
-                {currencyData?.liveDate ? (
-                  <> · Feed date: {String(currencyData.liveDate).slice(0, 25)}</>
-                ) : null}
-                <br />
-                Rates from ExchangeRate-API. Tap refresh if numbers look stuck at 1.
-              </CardDescription>
-            </div>
-            <Button size="sm" loading={refreshFx.isPending} onClick={() => refreshFx.mutate()}>
-              Refresh live rates
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap gap-2 items-end">
-              <div className="flex-1 min-w-[160px]">
-                <label className="text-xs text-muted-foreground">Enable currency</label>
-                <select
-                  className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
-                  value={addCurrencyCode}
-                  onChange={(e) => setAddCurrencyCode(e.target.value)}
-                >
-                  {(currencyData?.catalog || []).map((c) => (
-                    <option key={c.code} value={c.code}>
-                      {c.code} — {c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <Button variant="secondary" loading={addCurrency.isPending} onClick={() => addCurrency.mutate()}>
-                Add / update rate
-              </Button>
-            </div>
-            <div className="table-scroll rounded-xl border border-border">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
-                  <tr>
-                    <th className="p-2">Code</th>
-                    <th className="p-2">Name</th>
-                    <th className="p-2">Symbol</th>
-                    <th className="p-2">Market rate (API)</th>
-                    <th className="p-2">Synced</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(currencyData?.currencies || []).map((c) => {
-                    const base = currencyData?.baseCurrency || 'BASE';
-                    const market =
-                      typeof c.marketRate === 'number' && c.marketRate > 0
-                        ? c.marketRate
-                        : c.isBase
-                          ? 1
-                          : Number(c.exchangeRate) > 0
-                            ? 1 / Number(c.exchangeRate)
-                            : 0;
-                    return (
-                      <tr key={c.code} className="border-t border-border">
-                        <td className="p-2 font-mono font-semibold">
-                          {c.code}
-                          {c.isBase ? (
-                            <span className="ml-1 text-[10px] text-primary">BASE</span>
-                          ) : null}
-                        </td>
-                        <td className="p-2">{c.name}</td>
-                        <td className="p-2">{c.symbol}</td>
-                        <td className="p-2 tabular-nums">
-                          {c.isBase ? (
-                            <span>1 {c.code} = 1 {base}</span>
-                          ) : (
-                            <span>
-                              1 {base} ={' '}
-                              {market >= 100
-                                ? market.toLocaleString(undefined, { maximumFractionDigits: 2 })
-                                : market.toLocaleString(undefined, { maximumFractionDigits: 6 })}{' '}
-                              {c.code}
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-2 text-xs text-muted-foreground">
-                          {c.lastSyncedAt ? new Date(c.lastSyncedAt).toLocaleString() : '—'}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Add user (staff)</CardTitle>
-            <CardDescription>
-              Staff start as <strong>Pending approval</strong>. Approve them under{' '}
-              <a href="/app/staff" className="text-primary underline">
-                Staff & Approvals
-              </a>{' '}
-              before they can login.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Input placeholder="Email" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} />
-            <div className="grid grid-cols-2 gap-2">
-              <Input placeholder="First name" value={userForm.firstName} onChange={(e) => setUserForm({ ...userForm, firstName: e.target.value })} />
-              <Input placeholder="Last name" value={userForm.lastName} onChange={(e) => setUserForm({ ...userForm, lastName: e.target.value })} />
-            </div>
-            <Input placeholder="Password" type="password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} />
-            <select
-              className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
-              value={userForm.roleCode}
-              onChange={(e) => setUserForm({ ...userForm, roleCode: e.target.value })}
-            >
-              {['CASHIER', 'STORE_MANAGER', 'WAREHOUSE_MANAGER', 'ACCOUNTANT', 'SALES_PERSON', 'PHARMACIST', 'DOCTOR', 'ADMINISTRATOR'].map((r) => (
-                <option key={r} value={r}>
-                  {r.replace(/_/g, ' ')}
-                </option>
-              ))}
-            </select>
-            <Button loading={createUser.isPending} onClick={() => createUser.mutate()}>
-              Create user
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Branches</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {(data?.branches || []).map((b: { id: string; name: string; code: string; isHeadOffice: boolean }) => (
-              <div key={b.id} className="flex justify-between text-sm">
-                <span>
-                  {b.name} <span className="text-muted-foreground">({b.code})</span>
-                </span>
-                {b.isHeadOffice && <Badge>HQ</Badge>}
-              </div>
-            ))}
-            <div className="flex gap-2 pt-2">
-              <Input placeholder="Code" value={branchForm.code} onChange={(e) => setBranchForm({ ...branchForm, code: e.target.value })} />
-              <Input placeholder="Name" value={branchForm.name} onChange={(e) => setBranchForm({ ...branchForm, name: e.target.value })} />
-              <Button size="sm" loading={createBranch.isPending} onClick={() => createBranch.mutate()}>
-                Add
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Team members</CardTitle>
-            <CardDescription>
-              Pending staff need a <strong>Confirm Staff</strong> click before they can login.{' '}
-              <Link to="/app/staff" className="text-primary underline">
-                Open Staff & Approvals
-              </Link>
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 max-h-80 overflow-y-auto">
-            {(users?.data || []).map(
-              (u: {
-                id: string;
-                email: string;
-                firstName: string;
-                lastName: string;
-                status: string;
-                roles: Array<{ name: string }>;
-              }) => (
-                <div
-                  key={u.id}
-                  className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-sm border-b border-border/40 pb-3 ${
-                    u.status === 'PENDING_VERIFICATION' ? 'bg-warning/5 -mx-1 px-2 rounded-lg pt-2' : ''
-                  }`}
-                >
-                  <div>
-                    <p className="font-medium">
-                      {u.firstName} {u.lastName}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{u.email}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{u.roles?.[0]?.name}</p>
-                  </div>
-                  <div className="flex flex-col sm:items-end gap-2">
-                    <Badge
-                      variant={
-                        u.status === 'ACTIVE'
-                          ? 'success'
-                          : u.status === 'PENDING_VERIFICATION'
-                            ? 'warning'
-                            : 'secondary'
-                      }
-                    >
-                      {u.status === 'PENDING_VERIFICATION' ? 'PENDING APPROVAL' : u.status}
-                    </Badge>
-                    {u.status === 'PENDING_VERIFICATION' && (
-                      <Button
-                        size="sm"
-                        variant="success"
-                        className="font-semibold"
-                        loading={confirmStaff.isPending}
-                        onClick={() => confirmStaff.mutate(u.id)}
-                      >
-                        <UserCheck className="h-4 w-4" /> Confirm Staff
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              )
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              Notifications <RefreshCw className="h-3.5 w-3.5" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {(notifications || []).map((n: { id: string; title: string; body: string; createdAt: string; status: string }) => (
-              <div key={n.id} className="rounded-lg border border-border p-3 text-sm">
-                <p className="font-medium">{n.title}</p>
-                <p className="text-muted-foreground">{n.body}</p>
-                <p className="text-xs text-muted-foreground mt-1">{formatDate(n.createdAt)}</p>
-              </div>
-            ))}
-            {!notifications?.length && (
-              <p className="text-sm text-muted-foreground flex items-center gap-2">
-                <Package className="h-4 w-4" /> No notifications yet
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </PageShell>
-  );
-}
+// Settings hub lives in pages/settings (separate screens for Profile, Currency, Staff, Fonts)
+export { SettingsHubPage as SettingsPage } from '@/pages/settings/SettingsHubPage';

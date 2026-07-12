@@ -22,9 +22,12 @@ import {
   HrPage,
   InvoicesPage,
   ReportsPage,
-  SettingsPage,
 } from '@/pages/ModulePages';
+import { SettingsHubPage } from '@/pages/settings/SettingsHubPage';
 import { FontsPage } from '@/pages/settings/FontsPage';
+import { ProfilePage } from '@/pages/settings/ProfilePage';
+import { CurrencyPage } from '@/pages/settings/CurrencyPage';
+import { AddStaffPage } from '@/pages/settings/AddStaffPage';
 import { PlatformAdminPage } from '@/pages/admin/PlatformAdminPage';
 import { StaffPage } from '@/pages/admin/StaffPage';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
@@ -124,8 +127,11 @@ export default function App() {
               <Route path="laboratory" element={<Guard><LaboratoryPage /></Guard>} />
               <Route path="hr" element={<Guard><HrPage /></Guard>} />
               <Route path="reports" element={<Guard><ReportsPage /></Guard>} />
-              <Route path="settings" element={<Guard><SettingsPage /></Guard>} />
+              <Route path="settings" element={<Guard><SettingsHubPage /></Guard>} />
               <Route path="settings/fonts" element={<Guard><FontsPage /></Guard>} />
+              <Route path="settings/profile" element={<Guard><ProfilePage /></Guard>} />
+              <Route path="settings/currency" element={<Guard><CurrencyPage /></Guard>} />
+              <Route path="settings/staff" element={<Guard><AddStaffPage /></Guard>} />
             </Route>
 
             <Route path="*" element={<Navigate to="/login" replace />} />
