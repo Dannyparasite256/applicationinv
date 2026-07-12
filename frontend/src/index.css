@@ -511,6 +511,74 @@
     pointer-events: auto;
   }
 
+  /* —— Font preview: centered on viewport (portal to body), always fully visible —— */
+  .font-preview-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: max(0.75rem, env(safe-area-inset-top, 0px)) 0.75rem
+      max(0.75rem, env(safe-area-inset-bottom, 0px));
+    pointer-events: auto;
+  }
+
+  .font-preview-backdrop {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    margin: 0;
+    padding: 0;
+    background: rgba(0, 0, 0, 0.55);
+    cursor: pointer;
+  }
+
+  .font-preview-sheet {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 22rem;
+    max-height: min(88dvh, 32rem);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: 1rem;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--card));
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
+  }
+
+  .font-preview-header {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid hsl(var(--border));
+    background: hsl(var(--card));
+  }
+
+  .font-preview-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0.875rem 1rem;
+  }
+
+  .font-preview-footer {
+    flex: 0 0 auto;
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid hsl(var(--border));
+    background: hsl(var(--card));
+  }
+
   .product-editor-header {
     flex: 0 0 auto;
     display: flex;

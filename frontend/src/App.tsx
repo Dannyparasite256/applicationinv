@@ -24,6 +24,7 @@ import {
   ReportsPage,
   SettingsPage,
 } from '@/pages/ModulePages';
+import { FontsPage } from '@/pages/settings/FontsPage';
 import { PlatformAdminPage } from '@/pages/admin/PlatformAdminPage';
 import { StaffPage } from '@/pages/admin/StaffPage';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
@@ -124,6 +125,7 @@ export default function App() {
               <Route path="hr" element={<Guard><HrPage /></Guard>} />
               <Route path="reports" element={<Guard><ReportsPage /></Guard>} />
               <Route path="settings" element={<Guard><SettingsPage /></Guard>} />
+              <Route path="settings/fonts" element={<Guard><FontsPage /></Guard>} />
             </Route>
 
             <Route path="*" element={<Navigate to="/login" replace />} />
