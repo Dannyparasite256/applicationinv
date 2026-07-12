@@ -3,9 +3,16 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
 
+/**
+ * Asset base path:
+ * - '/' for website + Capacitor (androidScheme http → http://localhost/…)
+ *   Absolute paths fix blank reloads on /app/* routes (relative ./assets breaks).
+ * - Set CAPACITOR_RELATIVE=1 only if you must use file:// style packaging.
+ */
+const useRelativeBase = process.env.CAPACITOR_RELATIVE === '1';
+
 export default defineConfig({
-  // Relative paths required for Capacitor Android WebView assets
-  base: './',
+  base: useRelativeBase ? './' : '/',
   plugins: [
     react(),
     VitePWA({
@@ -21,16 +28,17 @@ export default defineConfig({
         theme_color: '#0f172a',
         background_color: '#0f172a',
         display: 'standalone',
-        start_url: './',
+        start_url: useRelativeBase ? './' : '/',
         icons: [
           {
-            src: './favicon.svg',
+            src: useRelativeBase ? './favicon.svg' : '/favicon.svg',
             sizes: 'any',
             type: 'image/svg+xml',
             purpose: 'any maskable',
           },
         ],
       },
+
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         navigateFallback: 'index.html',

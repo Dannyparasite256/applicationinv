@@ -86,7 +86,15 @@ services:
       - path: /*
         name: X-Frame-Options
         value: SAMEORIGIN
+      # Always revalidate the SPA shell so reloads pick up the latest index.html
+      - path: /
+        name: Cache-Control
+        value: no-cache, no-store, must-revalidate
+      - path: /index.html
+        name: Cache-Control
+        value: no-cache, no-store, must-revalidate
     routes:
+      # SPA fallback — every path serves index.html so React Router handles deep links
       - type: rewrite
         source: /*
         destination: /index.html
