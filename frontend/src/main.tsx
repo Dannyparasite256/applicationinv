@@ -32,8 +32,26 @@ if (!document.documentElement.dataset.font) {
   document.documentElement.dataset.font = 'system';
 }
 
+/** Ping the API so free-tier hosts (Render) wake before the first real request. */
+async function warmApi(): Promise<void> {
+  try {
+    const { getApiBaseUrl } = await import('@/lib/config');
+    const base = getApiBaseUrl();
+    if (!base || base.startsWith('/')) return; // same-origin proxy in local dev
+    const healthUrl = `${base.replace(/\/+$/, '')}/health`;
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 60_000);
+    await fetch(healthUrl, { method: 'GET', mode: 'cors', signal: ctrl.signal }).catch(() => undefined);
+    clearTimeout(t);
+  } catch {
+    /* non-fatal — requests will retry */
+  }
+}
+
 async function bootstrap() {
   await initNativeApp();
+  // Fire-and-forget wake; do not block first paint more than a short moment
+  void warmApi();
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <App />

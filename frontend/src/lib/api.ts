@@ -1,14 +1,25 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '@/stores/authStore';
-import { getApiBaseUrl } from '@/lib/config';
+import { getApiBaseUrl, isNativeApp } from '@/lib/config';
 
 const API_BASE = getApiBaseUrl();
+
+/** Free-tier cloud APIs can take 30–60s+ to wake; allow longer + retries. */
+const API_TIMEOUT_MS = 90_000;
+const MAX_NETWORK_RETRIES = 2;
 
 export const api = axios.create({
   baseURL: API_BASE,
   headers: { 'Content-Type': 'application/json' },
-  timeout: 30000,
+  timeout: API_TIMEOUT_MS,
 });
+
+function unreachableMessage(): string {
+  if (isNativeApp()) {
+    return 'Cannot reach the server. Check your internet connection. If you use a local/dev API, ensure the PC is online.';
+  }
+  return 'Cannot reach the server. The cloud API may be waking up — wait 30–60 seconds and try again.';
+}
 
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const { accessToken } = useAuthStore.getState();
@@ -37,11 +48,31 @@ let refreshing: Promise<string | null> | null = null;
 api.interceptors.response.use(
   (res) => res,
   async (error: AxiosError<{ message?: string }>) => {
-    const original = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+    const original = error.config as InternalAxiosRequestConfig & {
+      _retry?: boolean;
+      _networkRetry?: number;
+    };
     const url = String(original?.url || '');
     // Never try token refresh on public auth endpoints (login / forgot / reset / register)
     const isPublicAuth =
       /\/auth\/(login|register|refresh|forgot-password|reset-password|verify-email)/i.test(url);
+
+    // Retry transient network / cold-start failures (Render free tier sleep)
+    if (
+      original &&
+      !error.response &&
+      (error.code === 'ECONNABORTED' ||
+        error.code === 'ERR_NETWORK' ||
+        /network|timeout/i.test(error.message || ''))
+    ) {
+      const attempt = original._networkRetry || 0;
+      if (attempt < MAX_NETWORK_RETRIES) {
+        original._networkRetry = attempt + 1;
+        const delayMs = 1500 * (attempt + 1);
+        await new Promise((r) => setTimeout(r, delayMs));
+        return api(original);
+      }
+    }
 
     if (
       error.response?.status === 401 &&
@@ -81,15 +112,11 @@ api.interceptors.response.use(
         logout();
       }
     }
-    // Friendlier offline / unreachable API message for the phone
+    // Friendlier offline / unreachable API message (web cold-start vs native)
     if (!error.response && error.message) {
       const msg = error.message.toLowerCase();
       if (msg.includes('network') || msg.includes('timeout') || error.code === 'ECONNABORTED') {
-        return Promise.reject(
-          new Error(
-            'Cannot reach the server. Check that your phone is on the same Wi‑Fi and the PC API is running.'
-          )
-        );
+        return Promise.reject(new Error(unreachableMessage()));
       }
     }
     return Promise.reject(error);
@@ -101,13 +128,15 @@ export function getErrorMessage(error: unknown): string {
     if (!error.response) {
       const code = error.code || '';
       if (code === 'ECONNABORTED' || error.message.toLowerCase().includes('timeout')) {
-        return 'Request timed out. Check your connection and try again.';
+        return isNativeApp()
+          ? 'Request timed out. Check your connection and try again.'
+          : 'Server is slow to respond (it may be waking up). Wait a moment and retry.';
       }
       if (
         error.message.toLowerCase().includes('network') ||
         code === 'ERR_NETWORK'
       ) {
-        return 'Cannot reach the server. Check Wi‑Fi and that the PC API is running.';
+        return unreachableMessage();
       }
     }
     const data = error.response?.data as {

@@ -43,6 +43,10 @@ export function createApp() {
     if (corsOrigins.includes('*') || corsOrigins.includes(origin) || nativeOrigins.includes(origin)) {
       return true;
     }
+    // Hosted frontends on Render (and similar) — always allow HTTPS onrender.com
+    if (/^https:\/\/[a-z0-9-]+\.onrender\.com$/i.test(origin)) {
+      return true;
+    }
     // Private LAN IPs used by phones / tablets talking to a dev PC
     return /^https?:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+|127\.0\.0\.1|localhost)(:\d+)?$/.test(
       origin

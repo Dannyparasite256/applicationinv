@@ -33,7 +33,16 @@ import { canAccessPath, getDefaultHome } from '@/lib/roleAccess';
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: 1,
+      // Extra retries help when the free cloud API is cold-starting
+      retry: (failureCount, error) => {
+        if (failureCount >= 3) return false;
+        const msg = error instanceof Error ? error.message.toLowerCase() : '';
+        if (msg.includes('wake') || msg.includes('cannot reach') || msg.includes('timed out') || msg.includes('timeout')) {
+          return true;
+        }
+        return failureCount < 2;
+      },
+      retryDelay: (attempt) => Math.min(2000 * 2 ** attempt, 15_000),
       refetchOnWindowFocus: false,
       staleTime: 30_000,
     },
