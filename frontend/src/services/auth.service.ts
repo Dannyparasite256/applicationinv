@@ -34,6 +34,9 @@ export async function register(payload: {
   firstName: string;
   lastName: string;
   phone?: string;
+  /** Location-based default currency (e.g. UGX) */
+  currency?: string;
+  country?: string;
 }) {
   const { data } = await api.post<ApiResponse<AuthPayload>>('/auth/register', payload);
   return data.data;

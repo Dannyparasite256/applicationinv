@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -5,7 +6,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { register as registerApi } from '@/services/auth.service';
 import { useAuthStore } from '@/stores/authStore';
+import { useCurrencyStore } from '@/stores/currencyStore';
 import { getErrorMessage } from '@/lib/api';
+import { detectCurrencyFromDevice, detectCurrencyFromLocation } from '@/lib/localeCurrency';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -24,6 +27,24 @@ type FormData = z.infer<typeof schema>;
 export function RegisterPage() {
   const navigate = useNavigate();
   const setAuth = useAuthStore((s) => s.setAuth);
+  const applyLocationDefault = useCurrencyStore((s) => s.applyLocationDefault);
+  const deviceGuess = detectCurrencyFromDevice();
+  const [localCurrency, setLocalCurrency] = useState(deviceGuess.currency);
+  const [localCountry, setLocalCountry] = useState<string | null>(deviceGuess.country);
+
+  useEffect(() => {
+    let cancelled = false;
+    void detectCurrencyFromLocation().then((loc) => {
+      if (cancelled) return;
+      setLocalCurrency(loc.currency);
+      setLocalCountry(loc.country);
+      applyLocationDefault(loc.currency);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [applyLocationDefault]);
+
   const {
     register,
     handleSubmit,
@@ -32,9 +53,14 @@ export function RegisterPage() {
 
   const onSubmit = async (values: FormData) => {
     try {
-      const result = await registerApi(values);
+      const result = await registerApi({
+        ...values,
+        currency: localCurrency,
+        country: localCountry || undefined,
+      });
       setAuth(result.user, result.accessToken, result.refreshToken);
-      toast.success('Company created successfully!');
+      applyLocationDefault(localCurrency);
+      toast.success(`Company created · default currency ${localCurrency}`);
       navigate('/app');
     } catch (e) {
       toast.error(getErrorMessage(e));
@@ -47,7 +73,15 @@ export function RegisterPage() {
       <Card className="relative w-full max-w-lg glass">
         <CardHeader>
           <CardTitle className="text-2xl">Create your company</CardTitle>
-          <CardDescription>Start your 30-day trial of Enterprise IMS</CardDescription>
+          <CardDescription>
+            Start your 30-day trial of Enterprise IMS
+            {localCurrency ? (
+              <>
+                {' '}
+                · Base currency set to <strong>{localCurrency}</strong> from your location
+              </>
+            ) : null}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="grid gap-4 sm:grid-cols-2">

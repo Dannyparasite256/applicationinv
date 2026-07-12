@@ -13,6 +13,20 @@ export const registerSchema = z.object({
   firstName: z.string().min(1).max(100),
   lastName: z.string().min(1).max(100),
   phone: z.string().max(30).optional(),
+  /** Preferred ISO currency from client location (e.g. UGX, KES, USD) */
+  currency: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{3}$/)
+    .optional(),
+  /** Optional ISO country code from client location */
+  country: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{2}$/)
+    .optional(),
 });
 
 export const loginSchema = z.object({

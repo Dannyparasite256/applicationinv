@@ -140,6 +140,8 @@ export async function registerCompany(input: {
   firstName: string;
   lastName: string;
   phone?: string;
+  /** Location-based default accounting currency (ISO 4217) */
+  currency?: string;
 }) {
   const existing = await prisma.user.findFirst({ where: { email: input.email.toLowerCase() } });
   if (existing) throw new ConflictError('Email already registered');
@@ -152,6 +154,7 @@ export async function registerCompany(input: {
   }
 
   const passwordHash = await hashPassword(input.password);
+  const currency = (input.currency || 'USD').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) || 'USD';
 
   const result = await prisma.$transaction(async (tx) => {
     const company = await tx.company.create({
@@ -160,6 +163,7 @@ export async function registerCompany(input: {
         slug,
         email: input.email.toLowerCase(),
         phone: input.phone,
+        currency,
         status: 'TRIAL',
         trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       },

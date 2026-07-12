@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 import { useCurrencyStore, type AppCurrency } from '@/stores/currencyStore';
 import { useNetworkStore } from '@/stores/networkStore';
+import { detectCurrencyFromDevice, detectCurrencyFromLocation } from '@/lib/localeCurrency';
 
 type CurrencyApi = {
   baseCurrency: string;
@@ -18,6 +19,8 @@ export function useCurrencyBootstrap() {
   const companyId = useAuthStore((s) => s.user?.companyId);
   const online = useNetworkStore((s) => s.online);
   const setFromApi = useCurrencyStore((s) => s.setFromApi);
+  const applyLocationDefault = useCurrencyStore((s) => s.applyLocationDefault);
+  const setLocationCurrency = useCurrencyStore((s) => s.setLocationCurrency);
   const qc = useQueryClient();
 
   const query = useQuery({
@@ -42,15 +45,40 @@ export function useCurrencyBootstrap() {
     }
   }, [query.data, setFromApi]);
 
-  // Align display with company currency on first login if never set
+  // Detect local currency from timezone / locale / IP and apply as display default
   useEffect(() => {
-    const userCur = useAuthStore.getState().user?.company?.currency;
-    const { displayCurrency, baseCurrency, setDisplayCurrency } = useCurrencyStore.getState();
-    if (userCur && displayCurrency === 'USD' && baseCurrency === 'USD' && userCur !== 'USD') {
-      // only nudge if still defaults
-      setDisplayCurrency(userCur);
+    let cancelled = false;
+    const device = detectCurrencyFromDevice();
+    if (!cancelled) {
+      setLocationCurrency(device.currency);
+      applyLocationDefault(device.currency, { lock: false });
     }
-  }, [token]);
+
+    void detectCurrencyFromLocation().then(async (loc) => {
+      if (cancelled) return;
+      setLocationCurrency(loc.currency);
+      // Refine with IP country; lock so later refetches don't flip the top bar
+      applyLocationDefault(loc.currency, { lock: true });
+
+      // Ensure company has this currency enabled so top-bar can show it
+      if (token && companyId && loc.currency) {
+        const list = useCurrencyStore.getState().currencies;
+        const has = list.some((c) => c.code.toUpperCase() === loc.currency.toUpperCase());
+        if (!has) {
+          try {
+            await api.post('/currencies', { code: loc.currency });
+            await qc.invalidateQueries({ queryKey: ['currencies'] });
+          } catch {
+            /* may lack settings.company permission — ignore */
+          }
+        }
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token, companyId, setLocationCurrency, applyLocationDefault, qc]);
 
   const refreshRates = useCallback(async () => {
     const res = await api.post<{ data: CurrencyApi }>('/currencies/refresh');

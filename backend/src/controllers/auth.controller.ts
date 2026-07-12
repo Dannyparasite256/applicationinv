@@ -4,7 +4,18 @@ import { success, created } from '../utils/response';
 import { asyncHandler } from '../utils/asyncHandler';
 
 export const register = asyncHandler(async (req: Request, res: Response) => {
-  const result = await authService.registerCompany(req.body);
+  const { resolveDefaultCurrency } = await import('../utils/localeCurrency');
+  const currency = resolveDefaultCurrency({
+    currency: req.body?.currency,
+    country: req.body?.country,
+    acceptLanguage: req.get('accept-language'),
+    cfCountry: (req.headers['cf-ipcountry'] as string) || null,
+    vercelCountry: (req.headers['x-vercel-ip-country'] as string) || null,
+  });
+  const result = await authService.registerCompany({
+    ...req.body,
+    currency,
+  });
   return created(res, result, 'Company registered successfully');
 });
 

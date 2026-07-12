@@ -17,6 +17,13 @@ interface CurrencyState {
   baseCurrency: string;
   /** UI display / payment tender currency — applies app-wide when changed */
   displayCurrency: string;
+  /**
+   * True once the user picks a currency in the top bar (or we applied a location default).
+   * Prevents overwriting their choice on every page load.
+   */
+  displayCurrencyLocked: boolean;
+  /** Detected local currency from device/IP (ISO code) */
+  locationCurrency: string | null;
   rates: Record<string, number>; // base units per 1 unit of code
   currencies: AppCurrency[];
   lastSyncedAt: string | null;
@@ -26,8 +33,10 @@ interface CurrencyState {
     currencies: AppCurrency[];
     liveSource?: string | null;
   }) => void;
-  setDisplayCurrency: (code: string) => void;
+  setDisplayCurrency: (code: string, opts?: { lock?: boolean }) => void;
   setBaseCurrency: (code: string) => void;
+  setLocationCurrency: (code: string | null) => void;
+  applyLocationDefault: (code: string, opts?: { lock?: boolean }) => void;
   /**
    * Convert amount from one currency to another using stored rates.
    * Defaults: from=base, to=display
@@ -56,6 +65,8 @@ export const useCurrencyStore = create<CurrencyState>()(
     (set, get) => ({
       baseCurrency: 'USD',
       displayCurrency: 'USD',
+      displayCurrencyLocked: false,
+      locationCurrency: null,
       rates: { USD: 1 },
       currencies: [{ code: 'USD', name: 'US Dollar', symbol: '$', exchangeRate: 1, isBase: true }],
       lastSyncedAt: null,
@@ -68,26 +79,63 @@ export const useCurrencyStore = create<CurrencyState>()(
           rates[c.code.toUpperCase()] = Number(c.exchangeRate) || 1;
         }
         rates[base] = 1;
-        const display = get().displayCurrency;
-        const stillValid = currencies.some((c) => c.code.toUpperCase() === display.toUpperCase() && c.isActive !== false);
+        const { displayCurrency, displayCurrencyLocked, locationCurrency } = get();
+        let nextDisplay = displayCurrency;
+        if (displayCurrencyLocked) {
+          const stillValid = currencies.some(
+            (c) => c.code.toUpperCase() === displayCurrency.toUpperCase() && c.isActive !== false
+          );
+          if (!stillValid) nextDisplay = base;
+        } else {
+          // Prefer location currency if company has it enabled; else company base
+          const loc = (locationCurrency || '').toUpperCase();
+          const hasLoc = loc
+            ? currencies.some((c) => c.code.toUpperCase() === loc && c.isActive !== false)
+            : false;
+          nextDisplay = hasLoc ? loc : base;
+        }
         set({
           baseCurrency: base,
           rates,
           currencies,
           lastSyncedAt: new Date().toISOString(),
           liveSource: liveSource ?? get().liveSource,
-          displayCurrency: stillValid ? display : base,
+          displayCurrency: nextDisplay,
         });
       },
 
-      setDisplayCurrency: (code) => {
+      setDisplayCurrency: (code, opts) => {
         const c = code.toUpperCase();
-        set({ displayCurrency: c });
+        set({
+          displayCurrency: c,
+          displayCurrencyLocked: opts?.lock === false ? get().displayCurrencyLocked : true,
+        });
       },
 
       setBaseCurrency: (code) => {
         const c = code.toUpperCase();
-        set({ baseCurrency: c, displayCurrency: c });
+        set({ baseCurrency: c, displayCurrency: c, displayCurrencyLocked: true });
+      },
+
+      setLocationCurrency: (code) => {
+        set({ locationCurrency: code ? code.toUpperCase() : null });
+      },
+
+      applyLocationDefault: (code, opts) => {
+        const c = code.toUpperCase();
+        if (!/^[A-Z]{3}$/.test(c)) return;
+        const { displayCurrencyLocked } = get();
+        if (displayCurrencyLocked) {
+          // User already chose — only remember location, don't override
+          set({ locationCurrency: c });
+          return;
+        }
+        set({
+          locationCurrency: c,
+          displayCurrency: c,
+          // Lock after IP refine so we don't thrash; device-only guess stays unlocked
+          displayCurrencyLocked: opts?.lock === true,
+        });
       },
 
       convert: (amount, from, to) => {
@@ -121,6 +169,8 @@ export const useCurrencyStore = create<CurrencyState>()(
       partialize: (s) => ({
         baseCurrency: s.baseCurrency,
         displayCurrency: s.displayCurrency,
+        displayCurrencyLocked: s.displayCurrencyLocked,
+        locationCurrency: s.locationCurrency,
         rates: s.rates,
         currencies: s.currencies,
         lastSyncedAt: s.lastSyncedAt,

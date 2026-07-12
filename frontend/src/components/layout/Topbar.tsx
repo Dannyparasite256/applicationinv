@@ -120,7 +120,7 @@ export function Topbar({ onMenuClick }: TopbarProps) {
               aria-label="Display currency"
               title={`Display currency (base: ${baseCurrency}). Changing this converts all amounts app-wide.`}
               onChange={(e) => {
-                setDisplayCurrency(e.target.value);
+                setDisplayCurrency(e.target.value, { lock: true });
                 toast.message(`Currency: ${e.target.value}`, {
                   description: `All prices and totals now show in ${e.target.value} (base ${baseCurrency})`,
                 });
