@@ -23,7 +23,7 @@ export async function initNativeApp(): Promise<void> {
         /* ignore */
       }
     }
-    applyAppFont(fontId);
+    await applyAppFont(fontId);
   } catch (e) {
     console.warn('[native] font apply failed', e);
   }

@@ -26,15 +26,16 @@ export const useThemeStore = create<ThemeState>()(
         set({ theme });
       },
       setFontId: (fontId) => {
-        applyAppFont(fontId);
+        // Persist choice immediately; font file may still be downloading
         set({ fontId });
+        void applyAppFont(fontId);
       },
     }),
     {
       name: 'eims-theme',
       onRehydrateStorage: () => (state) => {
         // After persist rehydrate, apply saved font (or system default)
-        applyAppFont(state?.fontId || 'system');
+        void applyAppFont(state?.fontId || 'system');
         if (state?.theme === 'dark') {
           document.documentElement.classList.add('dark');
         }

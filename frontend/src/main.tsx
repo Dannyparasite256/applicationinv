@@ -19,12 +19,12 @@ if (theme) {
     if (parsed.state?.theme === 'dark') {
       document.documentElement.classList.add('dark');
     }
-    applyAppFont(parsed.state?.fontId || 'system');
+    void applyAppFont(parsed.state?.fontId || 'system');
   } catch {
-    applyAppFont('system');
+    void applyAppFont('system');
   }
 } else {
-  applyAppFont('system');
+  void applyAppFont('system');
 }
 // Ensure system class exists before first paint if default
 if (!document.documentElement.dataset.font) {

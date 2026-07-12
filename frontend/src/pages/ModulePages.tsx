@@ -2018,6 +2018,8 @@ export function SettingsPage() {
   const setTheme = useThemeStore((s) => s.setTheme);
   /** Font name list → tap to preview → Confirm to apply */
   const [previewFontId, setPreviewFontId] = useState<AppFontId | null>(null);
+  const [fontPreviewReady, setFontPreviewReady] = useState(false);
+  const [fontApplying, setFontApplying] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const { data } = useQuery({
     queryKey: ['company'],
@@ -2244,8 +2246,16 @@ export function SettingsPage() {
                     key={font.id}
                     type="button"
                     onClick={() => {
-                      loadFontForPreview(font.id);
+                      setFontPreviewReady(font.id === 'system');
                       setPreviewFontId(font.id as AppFontId);
+                      void loadFontForPreview(font.id).then((ok) => {
+                        setFontPreviewReady(true);
+                        if (!ok && font.id !== 'system') {
+                          toast.message('Font is loading…', {
+                            description: 'Preview may update when the download finishes.',
+                          });
+                        }
+                      });
                     }}
                     className={`w-full flex items-center justify-between gap-3 px-3 py-3 text-left transition-colors min-h-[3rem] ${
                       selected ? 'bg-primary/5' : 'bg-card hover:bg-muted/50'
@@ -2271,7 +2281,7 @@ export function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Font preview sheet — names only in list; confirm applies */}
+      {/* Font preview sheet — names only in list; confirm applies after load */}
       {previewFontId && (
         <div
           className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center"
@@ -2309,28 +2319,38 @@ export function SettingsPage() {
                     </Button>
                   </div>
 
-                  <div className="p-4 space-y-4" style={{ fontFamily: stack }}>
-                    <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Preview
-                      </p>
-                      <p className="text-2xl font-bold leading-tight">Enterprise IMS</p>
-                      <p className="text-base font-semibold">Dashboard · Products · Sales</p>
-                      <p className="text-sm leading-relaxed text-muted-foreground">
-                        The quick brown fox jumps over the lazy dog. Pack my box with five dozen
-                        liquor jugs.
-                      </p>
-                      <p className="text-sm tabular-nums">
-                        Prices: 12,500 · Stock: 48 · Order #1042
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        ABCDEFGHIJKLMNOPQRSTUVWXYZ
-                        <br />
-                        abcdefghijklmnopqrstuvwxyz
-                        <br />
-                        0123456789
-                      </p>
-                    </div>
+                  <div className="p-4 space-y-4">
+                    {!fontPreviewReady && font.id !== 'system' ? (
+                      <div className="rounded-xl border border-border bg-muted/30 p-8 text-center text-sm text-muted-foreground">
+                        Loading font preview…
+                      </div>
+                    ) : (
+                      <div
+                        key={`${font.id}-${fontPreviewReady ? 'ready' : 'wait'}`}
+                        className="rounded-xl border border-border bg-muted/30 p-4 space-y-3"
+                        style={{ fontFamily: stack }}
+                      >
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Preview
+                        </p>
+                        <p className="text-2xl font-bold leading-tight">Enterprise IMS</p>
+                        <p className="text-base font-semibold">Dashboard · Products · Sales</p>
+                        <p className="text-sm leading-relaxed text-muted-foreground">
+                          The quick brown fox jumps over the lazy dog. Pack my box with five dozen
+                          liquor jugs.
+                        </p>
+                        <p className="text-sm tabular-nums">
+                          Prices: 12,500 · Stock: 48 · Order #1042
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          ABCDEFGHIJKLMNOPQRSTUVWXYZ
+                          <br />
+                          abcdefghijklmnopqrstuvwxyz
+                          <br />
+                          0123456789
+                        </p>
+                      </div>
+                    )}
                     {isActive && (
                       <p className="text-xs text-center text-primary font-medium flex items-center justify-center gap-1">
                         <Check className="h-3.5 w-3.5" /> This is your current app font
@@ -2347,21 +2367,35 @@ export function SettingsPage() {
                       variant="outline"
                       className="flex-1 h-11"
                       onClick={() => setPreviewFontId(null)}
+                      disabled={fontApplying}
                     >
                       Cancel
                     </Button>
                     <Button
                       type="button"
                       className="flex-1 h-11"
-                      disabled={isActive}
+                      disabled={isActive || fontApplying}
+                      loading={fontApplying}
                       onClick={() => {
-                        setFontId(font.id as AppFontId);
-                        setPreviewFontId(null);
-                        toast.success(
-                          font.id === 'system'
-                            ? 'Using your phone system font'
-                            : `Font set to ${font.label}`
-                        );
+                        setFontApplying(true);
+                        void (async () => {
+                          try {
+                            // Load + apply before closing so the face is ready
+                            const { applyAppFont } = await import('@/lib/fonts');
+                            const ok = await applyAppFont(font.id);
+                            setFontId(font.id as AppFontId);
+                            setPreviewFontId(null);
+                            toast.success(
+                              font.id === 'system'
+                                ? 'Using your phone system font'
+                                : ok
+                                  ? `Font set to ${font.label}`
+                                  : `${font.label} applied (finishing download…)`
+                            );
+                          } finally {
+                            setFontApplying(false);
+                          }
+                        })();
                       }}
                     >
                       <Check className="h-4 w-4" />
