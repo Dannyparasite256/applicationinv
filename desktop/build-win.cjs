@@ -67,7 +67,8 @@ const iconIco = path.join(desktop, 'build', 'icon.ico');
 const rcedit = rceditCandidates.find((p) => fs.existsSync(p));
 if (rcedit && fs.existsSync(unpackedExe) && fs.existsSync(iconIco)) {
   console.log('\nEmbedding app icon into executable…');
-  run(rcedit, [unpackedExe, '--set-icon', iconIco], { cwd: desktop });
+  // Quote paths — product name contains a space ("Enterprise IMS.exe")
+  run(`"${rcedit}"`, [`"${unpackedExe}"`, '--set-icon', `"${iconIco}"`], { cwd: desktop });
 } else {
   console.warn('Skipping rcedit icon embed (tool or files missing)');
 }
