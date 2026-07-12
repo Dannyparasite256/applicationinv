@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -14,6 +14,9 @@ import {
   Copy,
   RefreshCw,
   X,
+  Lock,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 import { api, getErrorMessage } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
@@ -41,6 +44,52 @@ const WORKER_ROLES = [
   'ADMINISTRATOR',
 ];
 
+/** Friendly labels for staff access checkboxes */
+const FEATURE_LABELS: Record<string, string> = {
+  'pos.access': 'Point of Sale (POS)',
+  'sales.read': 'View sales history',
+  'sales.create': 'Create sales / invoices',
+  'inventory.products.read': 'View products & stock',
+  'inventory.products.create': 'Add products',
+  'inventory.products.update': 'Edit products',
+  'inventory.products.delete': 'Delete products',
+  'inventory.stock.adjust': 'Adjust stock levels',
+  'inventory.stock.transfer': 'Transfer stock between warehouses',
+  'crm.customers.read': 'View customers',
+  'crm.customers.create': 'Add / edit customers',
+  'purchases.read': 'View purchases & suppliers',
+  'purchases.create': 'Create purchase orders',
+  'purchases.update': 'Receive / update purchases',
+  'accounting.read': 'View accounting',
+  'accounting.write': 'Manage accounting entries',
+  'reports.read': 'View reports',
+  'settings.company': 'Company settings',
+  'users.manage': 'Manage staff & access',
+  'hr.employees.read': 'View HR / employees',
+  'hospital.patients.read': 'View patients',
+  'hospital.patients.create': 'Register patients',
+  'hospital.appointments.create': 'Book appointments',
+  'pharmacy.dispense': 'Pharmacy dispense',
+  'laboratory.read': 'View lab orders',
+  'laboratory.create': 'Create lab orders',
+};
+
+const MODULE_ORDER = [
+  'pos',
+  'sales',
+  'inventory',
+  'crm',
+  'purchases',
+  'accounting',
+  'reports',
+  'users',
+  'settings',
+  'hr',
+  'hospital',
+  'pharmacy',
+  'laboratory',
+];
+
 type StaffUser = {
   id: string;
   email: string;
@@ -51,6 +100,25 @@ type StaffUser = {
   createdAt: string;
   lastLoginAt?: string | null;
   roles: Array<{ code: string; name: string }>;
+};
+
+type PermCatalogItem = {
+  id: string;
+  code: string;
+  name: string;
+  module: string;
+  action: string;
+};
+
+type StaffAccess = {
+  userId: string;
+  email: string;
+  name: string;
+  roles: Array<{ code: string; name: string }>;
+  rolePermissions: string[];
+  effective: string[];
+  customized: boolean;
+  catalog: PermCatalogItem[];
 };
 
 type StaffForm = {
@@ -92,6 +160,8 @@ export function StaffPage() {
   const [newPassword, setNewPassword] = useState('');
   const [createdCreds, setCreatedCreds] = useState<{ email: string; password: string } | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [accessUser, setAccessUser] = useState<StaffUser | null>(null);
+  const [selectedPerms, setSelectedPerms] = useState<Set<string>>(new Set());
 
   const refreshAll = () => {
     qc.invalidateQueries({ queryKey: ['staff-pending'] });
@@ -99,6 +169,7 @@ export function StaffPage() {
     qc.invalidateQueries({ queryKey: ['staff-pending-count'] });
     qc.invalidateQueries({ queryKey: ['users'] });
     qc.invalidateQueries({ queryKey: ['notifications'] });
+    qc.invalidateQueries({ queryKey: ['staff-access'] });
   };
 
   const { data: pendingRes, isLoading: loadingPending } = useQuery({
@@ -226,6 +297,91 @@ export function StaffPage() {
     onError: (e) => toast.error(getErrorMessage(e)),
   });
 
+  const { data: accessData, isLoading: loadingAccess } = useQuery({
+    enabled: !!accessUser,
+    queryKey: ['staff-access', accessUser?.id],
+    queryFn: async () =>
+      (await api.get(`/users/${accessUser!.id}/permissions`)).data.data as StaffAccess,
+  });
+
+  useEffect(() => {
+    if (accessData?.effective) {
+      setSelectedPerms(new Set(accessData.effective));
+    }
+  }, [accessData]);
+
+  const saveAccess = useMutation({
+    mutationFn: async () =>
+      api.put(`/users/${accessUser!.id}/permissions`, {
+        permissions: Array.from(selectedPerms),
+      }),
+    onSuccess: () => {
+      toast.success('Staff access updated — changes apply on their next login / refresh');
+      refreshAll();
+      setAccessUser(null);
+    },
+    onError: (e) => toast.error(getErrorMessage(e)),
+  });
+
+  const resetAccess = useMutation({
+    mutationFn: async () => api.post(`/users/${accessUser!.id}/permissions/reset`),
+    onSuccess: (res) => {
+      const data = res.data?.data as StaffAccess | undefined;
+      if (data?.effective) setSelectedPerms(new Set(data.effective));
+      toast.success('Access reset to role defaults');
+      refreshAll();
+    },
+    onError: (e) => toast.error(getErrorMessage(e)),
+  });
+
+  const permsByModule = useMemo(() => {
+    const catalog = accessData?.catalog || [];
+    const map = new Map<string, PermCatalogItem[]>();
+    for (const p of catalog) {
+      const list = map.get(p.module) || [];
+      list.push(p);
+      map.set(p.module, list);
+    }
+    const modules = Array.from(map.keys()).sort((a, b) => {
+      const ia = MODULE_ORDER.indexOf(a);
+      const ib = MODULE_ORDER.indexOf(b);
+      if (ia === -1 && ib === -1) return a.localeCompare(b);
+      if (ia === -1) return 1;
+      if (ib === -1) return -1;
+      return ia - ib;
+    });
+    return modules.map((m) => ({ module: m, items: map.get(m)! }));
+  }, [accessData]);
+
+  const togglePerm = (code: string) => {
+    setSelectedPerms((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  };
+
+  const selectAllInModule = (codes: string[], on: boolean) => {
+    setSelectedPerms((prev) => {
+      const next = new Set(prev);
+      for (const c of codes) {
+        if (on) next.add(c);
+        else next.delete(c);
+      }
+      return next;
+    });
+  };
+
+  const openAccess = (u: StaffUser) => {
+    const roleCode = u.roles?.[0]?.code;
+    if (roleCode === 'COMPANY_OWNER' || roleCode === 'SUPER_ADMIN') {
+      toast.message('Owners and super admins always have full access');
+      return;
+    }
+    setAccessUser(u);
+  };
+
   const pending = pendingRes?.data || [];
   const all = allRes?.data || [];
 
@@ -268,7 +424,7 @@ export function StaffPage() {
             <Users className="h-6 w-6 text-primary" /> Staff Management
           </h1>
           <p className="text-sm text-muted-foreground">
-            Create, edit, reset passwords, confirm, or delete staff. Logins are dynamic — not hardcoded.
+            Create staff, set passwords, and choose which features each person can use.
           </p>
         </div>
         <Button
@@ -448,6 +604,9 @@ export function StaffPage() {
                 <Button size="lg" variant="outline" onClick={() => openEdit(u)}>
                   <Pencil className="h-4 w-4" /> Edit
                 </Button>
+                <Button size="lg" variant="outline" onClick={() => openAccess(u)}>
+                  <Lock className="h-4 w-4" /> Access
+                </Button>
                 <Button size="lg" variant="outline" onClick={() => { setPasswordUser(u); setNewPassword(''); }}>
                   <KeyRound className="h-4 w-4" /> Password
                 </Button>
@@ -466,7 +625,10 @@ export function StaffPage() {
           <CardTitle className="text-base flex items-center gap-2">
             <Shield className="h-4 w-4" /> All staff
           </CardTitle>
-          <CardDescription>Edit details, change password, or delete anytime</CardDescription>
+          <CardDescription>
+            Edit details, set passwords, or use <strong>Access</strong> to choose which menus and
+            actions each staff member can use
+          </CardDescription>
         </CardHeader>
         <CardContent className="p-0 table-scroll">
           <table className="w-full text-sm">
@@ -514,6 +676,9 @@ export function StaffPage() {
                       )}
                       <Button size="sm" variant="outline" onClick={() => openEdit(u)}>
                         <Pencil className="h-3.5 w-3.5" /> Edit
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => openAccess(u)}>
+                        <Lock className="h-3.5 w-3.5" /> Access
                       </Button>
                       <Button
                         size="sm"
@@ -602,6 +767,120 @@ export function StaffPage() {
                 </Button>
               </div>
             </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Access / permissions modal */}
+      {accessUser && (
+        <div className="modal-overlay" onClick={() => setAccessUser(null)}>
+          <Card
+            className="modal-sheet relative z-10 m-0 sm:m-auto w-full max-w-lg max-h-[min(90dvh,40rem)] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <CardHeader className="shrink-0 pb-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Lock className="h-4 w-4 text-primary" />
+                    Staff access
+                  </CardTitle>
+                  <CardDescription className="break-safe">
+                    Choose what <strong>{accessUser.firstName} {accessUser.lastName}</strong> can use.
+                    Role: {accessUser.roles?.map((r) => r.name).join(', ') || '—'}
+                    {accessData?.customized ? (
+                      <span className="text-warning"> · Customized</span>
+                    ) : null}
+                  </CardDescription>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setAccessUser(null)}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="flex-1 min-h-0 overflow-y-auto space-y-4 pb-4">
+              {loadingAccess && (
+                <p className="text-sm text-muted-foreground py-6 text-center">Loading permissions…</p>
+              )}
+              {!loadingAccess && permsByModule.length === 0 && (
+                <p className="text-sm text-muted-foreground py-6 text-center">
+                  No permissions defined yet. Seed the database or contact support.
+                </p>
+              )}
+              {permsByModule.map(({ module, items }) => {
+                const codes = items.map((i) => i.code);
+                const allOn = codes.every((c) => selectedPerms.has(c));
+                return (
+                  <div key={module} className="rounded-xl border border-border overflow-hidden">
+                    <div className="flex items-center justify-between gap-2 bg-muted/50 px-3 py-2">
+                      <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                        {module.replace(/_/g, ' ')}
+                      </p>
+                      <button
+                        type="button"
+                        className="text-[11px] font-semibold text-primary hover:underline"
+                        onClick={() => selectAllInModule(codes, !allOn)}
+                      >
+                        {allOn ? 'Clear module' : 'Select all'}
+                      </button>
+                    </div>
+                    <ul className="divide-y divide-border">
+                      {items.map((p) => {
+                        const on = selectedPerms.has(p.code);
+                        const fromRole = accessData?.rolePermissions?.includes(p.code);
+                        return (
+                          <li key={p.code}>
+                            <button
+                              type="button"
+                              onClick={() => togglePerm(p.code)}
+                              className="flex w-full items-start gap-3 px-3 py-2.5 text-left hover:bg-muted/40 transition-colors min-h-[2.75rem]"
+                            >
+                              {on ? (
+                                <CheckSquare className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                              ) : (
+                                <Square className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                              )}
+                              <span className="min-w-0 flex-1">
+                                <span className="block text-sm font-medium leading-snug">
+                                  {FEATURE_LABELS[p.code] || p.name}
+                                </span>
+                                <span className="block text-[10px] text-muted-foreground font-mono mt-0.5">
+                                  {p.code}
+                                  {fromRole ? ' · role default' : ''}
+                                </span>
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                );
+              })}
+            </CardContent>
+            <div className="shrink-0 border-t border-border p-3 flex flex-wrap gap-2 bg-card">
+              <Button
+                loading={saveAccess.isPending}
+                onClick={() => saveAccess.mutate()}
+                disabled={loadingAccess}
+              >
+                <Shield className="h-4 w-4" /> Save access
+              </Button>
+              <Button
+                variant="outline"
+                loading={resetAccess.isPending}
+                onClick={() => {
+                  if (window.confirm('Reset this staff member to default access for their role?')) {
+                    resetAccess.mutate();
+                  }
+                }}
+              >
+                <RefreshCw className="h-4 w-4" /> Role defaults
+              </Button>
+              <Button variant="ghost" onClick={() => setAccessUser(null)}>
+                Cancel
+              </Button>
+            </div>
           </Card>
         </div>
       )}

@@ -145,8 +145,32 @@ router.get('/reports/sales.csv', requirePermissions('reports.read'), ops.exportS
 // Users & org (static paths before :id)
 router.get('/users/pending/count', requirePermissions('users.manage'), ops.pendingStaffCount);
 router.get('/users/generate-password', requirePermissions('users.manage'), ops.generatePassword);
+router.get('/permissions', requirePermissions('users.manage'), ops.listPermissions);
 router.get('/users', requirePermissions('users.manage'), ops.listUsers);
 router.get('/users/:id', requirePermissions('users.manage'), ops.getStaff);
+router.get(
+  '/users/:id/permissions',
+  requirePermissions('users.manage'),
+  ops.getStaffPermissions
+);
+router.put(
+  '/users/:id/permissions',
+  requirePermissions('users.manage'),
+  validate(
+    z.object({
+      permissions: z.array(z.string().min(1)).optional(),
+      codes: z.array(z.string().min(1)).optional(),
+    })
+  ),
+  auditLog('users'),
+  ops.setStaffPermissions
+);
+router.post(
+  '/users/:id/permissions/reset',
+  requirePermissions('users.manage'),
+  auditLog('users'),
+  ops.resetStaffPermissions
+);
 router.post(
   '/users',
   requirePermissions('users.manage'),

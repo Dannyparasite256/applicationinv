@@ -402,10 +402,209 @@ export async function getStaff(companyId: string | null | undefined, userId: str
     },
   });
   if (!user) throw new NotFoundError('User');
+  const access = await getStaffPermissions(cid, userId);
   return {
     ...user,
     roles: user.roles.map((r) => r.role),
+    permissions: access.effective,
+    permissionDetail: access,
   };
+}
+
+/** Catalog of all system permissions (for owner feature checkboxes) */
+export async function listPermissionCatalog() {
+  const perms = await prisma.permission.findMany({
+    orderBy: [{ module: 'asc' }, { code: 'asc' }],
+  });
+  return perms.map((p) => ({
+    id: p.id,
+    code: p.code,
+    name: p.name,
+    module: p.module,
+    action: p.action,
+    description: p.description,
+  }));
+}
+
+async function getRolePermissionCodes(userId: string): Promise<Set<string>> {
+  const userRoles = await prisma.userRole.findMany({
+    where: { userId },
+    include: {
+      role: {
+        include: {
+          permissions: { include: { permission: true } },
+        },
+      },
+    },
+  });
+  const set = new Set<string>();
+  for (const ur of userRoles) {
+    for (const rp of ur.role.permissions) {
+      set.add(rp.permission.code);
+    }
+  }
+  return set;
+}
+
+/**
+ * Role defaults + user overrides + effective access for one staff member.
+ * Owners use this to see/edit what the staff can do.
+ */
+export async function getStaffPermissions(
+  companyId: string | null | undefined,
+  userId: string
+) {
+  const cid = requireCompany(companyId);
+  const user = await prisma.user.findFirst({
+    where: { id: userId, companyId: cid, deletedAt: null },
+    select: {
+      id: true,
+      email: true,
+      firstName: true,
+      lastName: true,
+      roles: { include: { role: { select: { code: true, name: true } } } },
+    },
+  });
+  if (!user) throw new NotFoundError('User');
+
+  const catalog = await listPermissionCatalog();
+  const roleCodes = await getRolePermissionCodes(userId);
+  const overrides = await prisma.userPermission.findMany({
+    where: { userId },
+    include: { permission: true },
+  });
+  const grantExtra = new Set(
+    overrides.filter((o) => o.granted).map((o) => o.permission.code)
+  );
+  const denyExtra = new Set(
+    overrides.filter((o) => !o.granted).map((o) => o.permission.code)
+  );
+
+  const effective = new Set(roleCodes);
+  for (const c of grantExtra) effective.add(c);
+  for (const c of denyExtra) effective.delete(c);
+
+  return {
+    userId: user.id,
+    email: user.email,
+    name: `${user.firstName} ${user.lastName}`.trim(),
+    roles: user.roles.map((r) => r.role),
+    rolePermissions: Array.from(roleCodes).sort(),
+    granted: Array.from(grantExtra).sort(),
+    denied: Array.from(denyExtra).sort(),
+    effective: Array.from(effective).sort(),
+    customized: overrides.length > 0,
+    catalog,
+  };
+}
+
+/**
+ * Set staff feature access from a list of permission codes.
+ * Stores only differences from the role default (grants + denies).
+ */
+export async function setStaffPermissions(
+  companyId: string | null | undefined,
+  userId: string,
+  actorId: string,
+  permissionCodes: string[]
+) {
+  const cid = requireCompany(companyId);
+  if (userId === actorId) {
+    throw new ValidationError('You cannot change your own access permissions here');
+  }
+
+  const user = await prisma.user.findFirst({
+    where: { id: userId, companyId: cid, deletedAt: null },
+    include: { roles: { include: { role: true } } },
+  });
+  if (!user) throw new NotFoundError('User');
+
+  const roleCodes = user.roles.map((r) => r.role.code);
+  if (roleCodes.includes(RoleCode.COMPANY_OWNER) || roleCodes.includes(RoleCode.SUPER_ADMIN)) {
+    throw new ForbiddenError('Cannot customize permissions for company owners or super admins');
+  }
+
+  const selected = new Set(
+    (permissionCodes || []).map((c) => String(c).trim()).filter(Boolean)
+  );
+
+  // Ensure any unknown codes still exist in DB (ignore junk)
+  const allPerms = await prisma.permission.findMany();
+  const byCode = new Map(allPerms.map((p) => [p.code, p]));
+  for (const code of selected) {
+    if (!byCode.has(code)) {
+      throw new ValidationError(`Unknown permission: ${code}`);
+    }
+  }
+
+  const rolePerms = await getRolePermissionCodes(userId);
+
+  // Deviations only
+  const toWrite: Array<{ userId: string; permissionId: string; granted: boolean }> = [];
+  for (const p of allPerms) {
+    const inRole = rolePerms.has(p.code);
+    const wanted = selected.has(p.code);
+    if (wanted && !inRole) {
+      toWrite.push({ userId, permissionId: p.id, granted: true });
+    } else if (!wanted && inRole) {
+      toWrite.push({ userId, permissionId: p.id, granted: false });
+    }
+  }
+
+  await prisma.userPermission.deleteMany({ where: { userId } });
+  if (toWrite.length) {
+    await prisma.userPermission.createMany({ data: toWrite });
+  }
+  await cacheDel(`perms:${userId}`);
+
+  await prisma.auditLog.create({
+    data: {
+      companyId: cid,
+      userId: actorId,
+      action: 'STAFF_PERMISSIONS_UPDATED',
+      module: 'users',
+      entityType: 'User',
+      entityId: userId,
+      newValues: {
+        selected: Array.from(selected),
+        overrides: toWrite.length,
+      },
+    },
+  });
+
+  return getStaffPermissions(cid, userId);
+}
+
+/** Reset staff to role defaults only (clear custom grants/denies) */
+export async function resetStaffPermissions(
+  companyId: string | null | undefined,
+  userId: string,
+  actorId: string
+) {
+  const cid = requireCompany(companyId);
+  const user = await prisma.user.findFirst({
+    where: { id: userId, companyId: cid, deletedAt: null },
+  });
+  if (!user) throw new NotFoundError('User');
+  if (userId === actorId) {
+    throw new ValidationError('You cannot reset your own access here');
+  }
+
+  await prisma.userPermission.deleteMany({ where: { userId } });
+  await cacheDel(`perms:${userId}`);
+
+  await prisma.auditLog.create({
+    data: {
+      companyId: cid,
+      userId: actorId,
+      action: 'STAFF_PERMISSIONS_RESET',
+      module: 'users',
+      entityType: 'User',
+      entityId: userId,
+    },
+  });
+
+  return getStaffPermissions(cid, userId);
 }
 
 export async function updateStaff(

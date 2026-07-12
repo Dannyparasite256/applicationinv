@@ -69,6 +69,74 @@ export async function ensurePlatformBootstrap(): Promise<void> {
       });
     }
 
+    // Minimal system worker roles so tenant staff get defaults without full seed
+    const workerRoleMap: Record<string, string[]> = {
+      COMPANY_OWNER: allPerms.map((p) => p.code),
+      ADMINISTRATOR: allPerms.map((p) => p.code),
+      BRANCH_MANAGER: [
+        'pos.access', 'sales.read', 'sales.create', 'inventory.products.read', 'inventory.products.create',
+        'inventory.products.update', 'inventory.stock.adjust', 'inventory.stock.transfer',
+        'crm.customers.read', 'crm.customers.create', 'purchases.read', 'purchases.create', 'purchases.update',
+        'reports.read', 'hr.employees.read', 'users.manage',
+      ],
+      CASHIER: ['pos.access', 'sales.read', 'inventory.products.read', 'crm.customers.read', 'crm.customers.create'],
+      STORE_MANAGER: [
+        'pos.access', 'sales.read', 'sales.create', 'inventory.products.read', 'inventory.products.create',
+        'inventory.products.update', 'inventory.stock.adjust', 'crm.customers.read', 'crm.customers.create', 'reports.read',
+      ],
+      WAREHOUSE_MANAGER: [
+        'inventory.products.read', 'inventory.products.update', 'inventory.stock.adjust', 'inventory.stock.transfer',
+        'purchases.read', 'purchases.update',
+      ],
+      ACCOUNTANT: [
+        'accounting.read', 'accounting.write', 'sales.read', 'purchases.read', 'reports.read', 'crm.customers.read',
+      ],
+      SALES_PERSON: [
+        'pos.access', 'sales.read', 'sales.create', 'inventory.products.read', 'crm.customers.read', 'crm.customers.create',
+      ],
+      PROCUREMENT_OFFICER: [
+        'purchases.read', 'purchases.create', 'purchases.update', 'inventory.products.read', 'crm.customers.read',
+      ],
+      PHARMACIST: [
+        'pharmacy.dispense', 'inventory.products.read', 'inventory.stock.adjust', 'pos.access', 'sales.read',
+        'crm.customers.read',
+      ],
+      DOCTOR: ['hospital.patients.read', 'hospital.patients.create', 'hospital.appointments.create', 'pharmacy.dispense'],
+      NURSE: ['hospital.patients.read', 'hospital.patients.create', 'hospital.appointments.create'],
+      RECEPTIONIST: [
+        'hospital.patients.read', 'hospital.patients.create', 'hospital.appointments.create', 'crm.customers.read',
+        'crm.customers.create',
+      ],
+      LABORATORY_TECHNICIAN: ['laboratory.read', 'laboratory.create', 'hospital.patients.read'],
+    };
+
+    for (const [code, permCodes] of Object.entries(workerRoleMap)) {
+      let role = await prisma.role.findFirst({
+        where: { companyId: null, code: code as RoleCode },
+      });
+      if (!role) {
+        role = await prisma.role.create({
+          data: {
+            code: code as RoleCode,
+            name: code.replace(/_/g, ' '),
+            isSystem: true,
+            companyId: null,
+          },
+        });
+      }
+      const count = await prisma.rolePermission.count({ where: { roleId: role.id } });
+      if (count > 0) continue;
+      for (const pCode of permCodes) {
+        const perm = allPerms.find((p) => p.code === pCode);
+        if (!perm) continue;
+        await prisma.rolePermission.upsert({
+          where: { roleId_permissionId: { roleId: role.id, permissionId: perm.id } },
+          create: { roleId: role.id, permissionId: perm.id },
+          update: {},
+        });
+      }
+    }
+
     // Platform shell company (superadmin is tenant-attached for multi-tenant model)
     let platform = await prisma.company.findUnique({ where: { slug: 'platform' } });
     if (!platform) {

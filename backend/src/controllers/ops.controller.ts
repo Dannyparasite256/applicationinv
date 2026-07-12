@@ -388,6 +388,35 @@ export const updateStaff = asyncHandler(async (req: Request, res: Response) => {
   );
 });
 
+export const listPermissions = asyncHandler(async (_req: Request, res: Response) => {
+  return success(res, await userAdmin.listPermissionCatalog());
+});
+
+export const getStaffPermissions = asyncHandler(async (req: Request, res: Response) => {
+  return success(res, await userAdmin.getStaffPermissions(req.companyId, req.params.id));
+});
+
+export const setStaffPermissions = asyncHandler(async (req: Request, res: Response) => {
+  const codes = Array.isArray(req.body?.permissions)
+    ? req.body.permissions
+    : Array.isArray(req.body?.codes)
+      ? req.body.codes
+      : [];
+  return success(
+    res,
+    await userAdmin.setStaffPermissions(req.companyId, req.params.id, req.user!.id, codes),
+    'Staff access updated'
+  );
+});
+
+export const resetStaffPermissions = asyncHandler(async (req: Request, res: Response) => {
+  return success(
+    res,
+    await userAdmin.resetStaffPermissions(req.companyId, req.params.id, req.user!.id),
+    'Staff access reset to role defaults'
+  );
+});
+
 export const setStaffPassword = asyncHandler(async (req: Request, res: Response) => {
   const password =
     req.body.password && String(req.body.password).length >= 8
