@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowLeft, Coins, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Coins, MapPin, RefreshCw } from 'lucide-react';
 import { api, getErrorMessage } from '@/lib/api';
 import { useCurrencyStore } from '@/stores/currencyStore';
 import { refreshMoneyViews } from '@/lib/refreshApp';
+import { requestLocationCurrency } from '@/lib/localeCurrency';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
 
@@ -31,6 +32,9 @@ type CurrencyApi = {
 export function CurrencyPage() {
   const qc = useQueryClient();
   const [addCurrencyCode, setAddCurrencyCode] = useState('EUR');
+  const [locating, setLocating] = useState(false);
+  const displayCurrency = useCurrencyStore((s) => s.displayCurrency);
+  const locationCurrency = useCurrencyStore((s) => s.locationCurrency);
 
   const { data: currencyData, refetch, isFetching } = useQuery({
     queryKey: ['currencies'],
@@ -86,6 +90,41 @@ export function CurrencyPage() {
     onError: (e) => toast.error(getErrorMessage(e)),
   });
 
+  const useLocation = async () => {
+    setLocating(true);
+    try {
+      const loc = await requestLocationCurrency();
+      if (!loc.currency) {
+        toast.error('Location unavailable', {
+          description: 'Allow location access in browser or phone settings, then try again.',
+        });
+        return;
+      }
+      useCurrencyStore.getState().setLocationCurrency(loc.currency);
+      useCurrencyStore.getState().setDisplayCurrency(loc.currency, { lock: true });
+      try {
+        await api.post('/currencies', { code: loc.currency });
+        await refetch();
+      } catch {
+        /* permission may be missing — still set display currency client-side */
+      }
+      await refreshMoneyViews(qc);
+      const via =
+        loc.source === 'gps'
+          ? 'GPS'
+          : loc.source.startsWith('ip')
+            ? 'network location'
+            : 'device settings';
+      toast.success(`Display currency: ${loc.currency}`, {
+        description: loc.place ? `${loc.place} · ${via}` : `Detected via ${via}`,
+      });
+    } catch (e) {
+      toast.error(getErrorMessage(e) || 'Could not read location');
+    } finally {
+      setLocating(false);
+    }
+  };
+
   const base = currencyData?.baseCurrency || 'USD';
 
   return (
@@ -115,6 +154,39 @@ export function CurrencyPage() {
         </Button>
       </div>
 
+      <Card className="border-primary/20 bg-primary/5">
+        <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
+            <MapPin className="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">Location → display currency</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Allow location so amounts show in your local currency (e.g. UGX in Uganda).
+              {displayCurrency ? (
+                <>
+                  {' '}
+                  Showing <strong>{displayCurrency}</strong>
+                  {locationCurrency && locationCurrency !== displayCurrency
+                    ? ` · detected ${locationCurrency}`
+                    : null}
+                  .
+                </>
+              ) : null}
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="shrink-0"
+            loading={locating}
+            onClick={() => void useLocation()}
+          >
+            <MapPin className="h-4 w-4" /> Use my location
+          </Button>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
@@ -126,7 +198,7 @@ export function CurrencyPage() {
               ? `Feed: ${String(currencyData.liveDate).slice(0, 28)}`
               : 'Rates from ExchangeRate-API. Refresh if values look stuck.'}
             <br />
-            Display currency is chosen from the top bar (converts amounts app-wide).
+            Display currency is set from your location or the top-bar selector.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
