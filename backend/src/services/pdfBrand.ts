@@ -1,5 +1,6 @@
 /**
  * Shared PDF branding: company block + optional logo for all documents.
+ * Logos may be data URLs (durable in DB) or legacy filesystem paths under /uploads.
  */
 import fs from 'fs';
 import path from 'path';
@@ -13,8 +14,21 @@ export type BrandMeta = {
   phone: string;
   address: string;
   currency: string;
+  /** Filesystem path (legacy) or null */
   logoPath: string | null;
+  /** In-memory image buffer from data URL (preferred) */
+  logoBuffer: Buffer | null;
 };
+
+function dataUrlToBuffer(dataUrl: string): Buffer | null {
+  const m = dataUrl.match(/^data:image\/[\w+.+-]+;base64,(.+)$/i);
+  if (!m?.[1]) return null;
+  try {
+    return Buffer.from(m[1], 'base64');
+  } catch {
+    return null;
+  }
+}
 
 export async function loadBrandMeta(companyId: string): Promise<BrandMeta> {
   const c = await prisma.company.findFirst({
@@ -32,22 +46,28 @@ export async function loadBrandMeta(companyId: string): Promise<BrandMeta> {
   });
 
   let logoPath: string | null = null;
+  let logoBuffer: Buffer | null = null;
+
   if (c?.logoUrl) {
-    const rel = c.logoUrl.replace(/^\//, '');
-    const candidates = [
-      path.resolve(process.cwd(), env.UPLOAD_DIR, rel.replace(/^uploads[\\/]/, '')),
-      path.resolve(process.cwd(), rel),
-      path.resolve(process.cwd(), 'uploads', path.basename(rel)),
-      path.resolve(process.cwd(), env.UPLOAD_DIR, 'logos', path.basename(rel)),
-    ];
-    for (const p of candidates) {
-      try {
-        if (fs.existsSync(p)) {
-          logoPath = p;
-          break;
+    if (/^data:image\//i.test(c.logoUrl)) {
+      logoBuffer = dataUrlToBuffer(c.logoUrl);
+    } else {
+      const rel = c.logoUrl.replace(/^\//, '');
+      const candidates = [
+        path.resolve(process.cwd(), env.UPLOAD_DIR, rel.replace(/^uploads[\\/]/, '')),
+        path.resolve(process.cwd(), rel),
+        path.resolve(process.cwd(), 'uploads', path.basename(rel)),
+        path.resolve(process.cwd(), env.UPLOAD_DIR, 'logos', path.basename(rel)),
+      ];
+      for (const p of candidates) {
+        try {
+          if (fs.existsSync(p)) {
+            logoPath = p;
+            break;
+          }
+        } catch {
+          /* ignore */
         }
-      } catch {
-        /* ignore */
       }
     }
   }
@@ -60,6 +80,7 @@ export async function loadBrandMeta(companyId: string): Promise<BrandMeta> {
     address,
     currency: (c?.currency || 'USD').toUpperCase(),
     logoPath,
+    logoBuffer,
   };
 }
 
@@ -76,9 +97,10 @@ export function drawBrandedHeader(
   doc.rect(0, 0, pageW, barH).fill('#4f46e5');
 
   let textX = 40;
-  if (brand.logoPath) {
+  const logoSrc = brand.logoBuffer || brand.logoPath;
+  if (logoSrc) {
     try {
-      doc.image(brand.logoPath, 36, 10, { height: 36, fit: [36, 36] });
+      doc.image(logoSrc, 36, 10, { height: 36, fit: [36, 36] });
       textX = 80;
     } catch {
       /* skip bad image */

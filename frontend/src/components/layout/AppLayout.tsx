@@ -10,9 +10,11 @@ import { useCurrencyStore } from '@/stores/currencyStore';
 import { applyAppFont } from '@/lib/fonts';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { useCurrencyBootstrap } from '@/hooks/useCurrencyBootstrap';
+import { fetchMe } from '@/services/auth.service';
 
 export function AppLayout() {
   const accessToken = useAuthStore((s) => s.accessToken);
+  const setUser = useAuthStore((s) => s.setUser);
   const theme = useThemeStore((s) => s.theme);
   const fontId = useThemeStore((s) => s.fontId);
   // Subscribe so the whole app shell re-renders when currency / rates change.
@@ -28,6 +30,38 @@ export function AppLayout() {
   useOfflineSync();
   // Multi-currency rates + app-wide display currency
   useCurrencyBootstrap();
+
+  // Refresh profile (incl. durable company logoUrl) from the API on every session.
+  // Survives reinstall and APK updates: logo lives in the database, not on the device.
+  useEffect(() => {
+    if (!accessToken) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const me = await fetchMe();
+        if (cancelled || !me) return;
+        const prev = useAuthStore.getState().user;
+        setUser({
+          ...(prev || {}),
+          ...me,
+          company: me.company
+            ? {
+                id: me.company.id,
+                name: me.company.name,
+                slug: me.company.slug,
+                logoUrl: me.company.logoUrl,
+                currency: me.company.currency,
+              }
+            : prev?.company,
+        });
+      } catch {
+        /* offline / expired — keep cached user */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, setUser]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');

@@ -25,7 +25,17 @@ export const uploadLogo = asyncHandler(async (req: Request, res: Response) => {
   const file = (req as Request & { file?: Express.Multer.File }).file;
   if (!file) throw new ValidationError('Choose an image file for your business logo');
 
-  const logoUrl = `/uploads/logos/${file.filename}`;
+  // Persist as data URL in Postgres so the logo survives redeploys, app updates,
+  // and uninstall/reinstall (client always reloads logoUrl from the API on login).
+  let logoUrl: string;
+  try {
+    const { fileToDataUrl } = await import('../middleware/upload');
+    logoUrl = fileToDataUrl(file);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Invalid logo file';
+    throw new ValidationError(msg);
+  }
+
   const company = await prisma.company.update({
     where: { id: req.companyId },
     data: { logoUrl },

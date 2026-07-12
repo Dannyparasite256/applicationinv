@@ -51,6 +51,33 @@ export const useAuthStore = create<AuthState>()(
         return roles.some((r) => user.roles?.includes(r));
       },
     }),
-    { name: 'eims-auth' }
+    {
+      name: 'eims-auth',
+      // Keep tokens + user profile offline, but do not persist huge data-URL logos
+      // (they reload from the API via /auth/me on every session).
+      partialize: (state) => {
+        const user = state.user
+          ? {
+              ...state.user,
+              company: state.user.company
+                ? {
+                    ...state.user.company,
+                    // Drop data: logos from localStorage (can exceed quota); paths stay fine
+                    logoUrl:
+                      state.user.company.logoUrl &&
+                      state.user.company.logoUrl.startsWith('data:')
+                        ? null
+                        : state.user.company.logoUrl,
+                  }
+                : undefined,
+            }
+          : null;
+        return {
+          user,
+          accessToken: state.accessToken,
+          refreshToken: state.refreshToken,
+        };
+      },
+    }
   )
 );

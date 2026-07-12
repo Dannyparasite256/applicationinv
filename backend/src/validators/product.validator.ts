@@ -34,11 +34,12 @@ export const createProductSchema = z.object({
   form: z.string().optional().nullable(),
   manufacturer: z.string().optional().nullable(),
   requiresPrescription: z.boolean().default(false),
-  // Absolute https URL or local upload path `/uploads/...`
+  // Absolute https URL, data URL (durable in DB), or local upload path `/uploads/...`
   imageUrl: z
     .union([
       z.string().url(),
-      z.string().regex(/^\/uploads\//, 'Must be a URL or /uploads/ path'),
+      z.string().regex(/^data:image\//i, 'Must be a data URL image'),
+      z.string().regex(/^\/uploads\//, 'Must be a URL, data URL, or /uploads/ path'),
       z.literal(''),
       z.null(),
     ])

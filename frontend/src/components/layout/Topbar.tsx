@@ -8,7 +8,6 @@ import { useThemeStore } from '@/stores/themeStore';
 import { useNetworkStore } from '@/stores/networkStore';
 import { useCurrencyStore } from '@/stores/currencyStore';
 import { getInitials } from '@/lib/utils';
-import { getMediaUrl, brandInitials } from '@/lib/media';
 import { logout as logoutApi } from '@/services/auth.service';
 import { api } from '@/lib/api';
 import { runSyncEngine } from '@/lib/offline/syncEngine';
@@ -17,6 +16,7 @@ import { requestNotificationPermission, notifyLocal } from '@/native/notificatio
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { GlobalSearch } from '@/components/layout/GlobalSearch';
+import { BrandMark } from '@/components/shared/BrandMark';
 import { useEffect, useRef, useState } from 'react';
 
 interface TopbarProps {
@@ -75,7 +75,19 @@ export function Topbar({ onMenuClick }: TopbarProps) {
     navigate('/login');
   };
 
-  const companyLogo = getMediaUrl(user?.company?.logoUrl);
+  // Live company profile so logo/name stay in sync after Settings → Profile upload
+  const { data: company } = useQuery({
+    queryKey: ['company'],
+    queryFn: async () => (await api.get('/company')).data.data as {
+      name?: string;
+      logoUrl?: string | null;
+    },
+    staleTime: 30_000,
+    enabled: Boolean(user?.companyId || user?.company?.id),
+  });
+
+  const companyName = company?.name || user?.company?.name || 'Enterprise IMS';
+  const companyLogoUrl = company?.logoUrl ?? user?.company?.logoUrl;
 
   return (
     <header className="app-topbar sticky top-0 z-40 border-b border-border/80 bg-background/95 backdrop-blur-xl shadow-soft/50 shrink-0 min-w-0 w-full max-w-full overflow-x-clip">
@@ -90,18 +102,16 @@ export function Topbar({ onMenuClick }: TopbarProps) {
           <Menu className="h-5 w-5" />
         </Button>
 
-        {/* Mobile brand — shrinks on narrow screens so actions stay visible */}
-        <div className="flex items-center gap-1.5 lg:hidden min-w-0 flex-1 overflow-hidden max-w-[42vw] xs:max-w-none">
-          <div className="brand-mark h-8 w-8 sm:h-8 sm:w-8 text-[10px] shrink-0">
-            {companyLogo ? (
-              <img src={companyLogo} alt="" className="h-full w-full object-cover" />
-            ) : (
-              brandInitials(user?.company?.name)
-            )}
-          </div>
+        {/* Brand: company logo + name (always visible next to the business name) */}
+        <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden max-w-[42vw] xs:max-w-[min(14rem,46vw)] lg:max-w-none lg:flex-none">
+          <BrandMark
+            logoUrl={companyLogoUrl}
+            name={companyName}
+            className="h-8 w-8 text-[10px] shrink-0"
+          />
           <div className="min-w-0 flex-1 hidden min-[360px]:block">
             <p className="text-xs sm:text-sm font-bold truncate font-display leading-tight">
-              {user?.company?.name || 'Enterprise IMS'}
+              {companyName}
             </p>
           </div>
         </div>

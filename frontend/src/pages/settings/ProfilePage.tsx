@@ -4,11 +4,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ArrowLeft, Building2, Camera, ImagePlus } from 'lucide-react';
 import { api, getErrorMessage } from '@/lib/api';
-import { getMediaUrl, brandInitials } from '@/lib/media';
+import { getMediaUrl } from '@/lib/media';
 import { refreshAppData } from '@/lib/refreshApp';
 import { useAuthStore } from '@/stores/authStore';
 import { useCurrencyStore } from '@/stores/currencyStore';
 import { usePreferencesStore } from '@/stores/preferencesStore';
+import { BrandMark } from '@/components/shared/BrandMark';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
@@ -167,13 +168,12 @@ export function ProfilePage() {
         <CardContent className="pt-0 -mt-10 relative space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-end gap-4">
             <div className="relative">
-              <div className="brand-mark h-20 w-20 text-xl ring-4 ring-card shadow-elevated">
-                {logoPreview ? (
-                  <img src={logoPreview} alt="Business logo" className="h-full w-full object-cover" />
-                ) : (
-                  brandInitials(profile.name || data?.name)
-                )}
-              </div>
+              <BrandMark
+                logoUrl={logoPreview}
+                name={profile.name || data?.name}
+                className="h-20 w-20 text-xl ring-4 ring-card shadow-elevated"
+                alt="Business logo"
+              />
               <button
                 type="button"
                 className="absolute -bottom-1 -right-1 flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-glow"

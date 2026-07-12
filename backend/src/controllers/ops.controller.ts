@@ -547,22 +547,17 @@ export const getPurchase = asyncHandler(async (req: Request, res: Response) => {
 });
 
 // ── Upload ────────────────────────────────────────────────
+// Memory storage for images → durable data URLs in DB (survives redeploy).
+// Non-images still land on disk (ephemeral; prefer object storage in production).
 const uploadDir = path.resolve(process.cwd(), env.UPLOAD_DIR || 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadDir),
-  filename: (_req, file, cb) => {
-    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    cb(null, `${unique}${path.extname(file.originalname)}`);
-  },
-});
-
 export const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: (env.MAX_FILE_SIZE_MB || 10) * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    const ok = /jpeg|jpg|png|gif|webp|pdf|csv|xlsx/.test(path.extname(file.originalname).toLowerCase()) ||
+    const ok =
+      /jpeg|jpg|png|gif|webp|pdf|csv|xlsx/.test(path.extname(file.originalname).toLowerCase()) ||
       file.mimetype.startsWith('image/');
     cb(null, ok);
   },
@@ -573,8 +568,38 @@ export const uploadFile = asyncHandler(async (req: Request, res: Response) => {
   if (!file) {
     return res.status(400).json({ success: false, message: 'No file uploaded' });
   }
-  const url = `/uploads/${file.filename}`;
-  return created(res, { url, filename: file.filename, size: file.size, mimetype: file.mimetype });
+
+  // Images: store as data URL so product/profile images survive server redeploys
+  if (file.mimetype?.startsWith('image/') && file.buffer?.length) {
+    const maxBytes = 2 * 1024 * 1024;
+    if (file.buffer.length > maxBytes) {
+      return res.status(400).json({
+        success: false,
+        message: 'Image is too large. Please use a file under 2 MB.',
+      });
+    }
+    const url = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+    return created(res, {
+      url,
+      filename: file.originalname || 'image',
+      size: file.size,
+      mimetype: file.mimetype,
+    });
+  }
+
+  // Non-image files: write to disk (legacy path)
+  const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+  const ext = path.extname(file.originalname || '') || '';
+  const filename = `${unique}${ext}`;
+  const dest = path.join(uploadDir, filename);
+  try {
+    fs.mkdirSync(uploadDir, { recursive: true });
+    fs.writeFileSync(dest, file.buffer);
+  } catch {
+    return res.status(500).json({ success: false, message: 'Failed to save file' });
+  }
+  const url = `/uploads/${filename}`;
+  return created(res, { url, filename, size: file.size, mimetype: file.mimetype });
 });
 
 // ── Taxes / Units ─────────────────────────────────────────

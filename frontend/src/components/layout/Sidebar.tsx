@@ -22,7 +22,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { filterNavForUser } from '@/lib/roleAccess';
-import { getMediaUrl, brandInitials } from '@/lib/media';
+import { BrandMark } from '@/components/shared/BrandMark';
 import { tLabel } from '@/lib/i18nSimple';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -143,8 +143,16 @@ export function Sidebar({ open, onToggle, mobile, onNavigate }: SidebarProps) {
     refetchInterval: 60_000,
   });
 
-  const companyName = user?.company?.name || 'Enterprise IMS';
-  const logoSrc = getMediaUrl(user?.company?.logoUrl);
+  const { data: company } = useQuery({
+    queryKey: ['company'],
+    queryFn: async () =>
+      (await api.get('/company')).data.data as { name?: string; logoUrl?: string | null },
+    staleTime: 30_000,
+    enabled: Boolean(user?.companyId || user?.company?.id),
+  });
+
+  const companyName = company?.name || user?.company?.name || 'Enterprise IMS';
+  const companyLogoUrl = company?.logoUrl ?? user?.company?.logoUrl;
 
   return (
     <aside
@@ -160,13 +168,11 @@ export function Sidebar({ open, onToggle, mobile, onNavigate }: SidebarProps) {
     >
       <div className="app-topbar border-b border-border/80 shrink-0">
         <div className="app-topbar-inner gap-2.5 px-3">
-        <div className="brand-mark h-9 w-9 text-xs ring-2 ring-primary/10 shrink-0">
-          {logoSrc ? (
-            <img src={logoSrc} alt={companyName} className="h-full w-full object-cover" />
-          ) : (
-            brandInitials(companyName)
-          )}
-        </div>
+        <BrandMark
+          logoUrl={companyLogoUrl}
+          name={companyName}
+          className="h-9 w-9 text-xs ring-2 ring-primary/10 shrink-0"
+        />
         {(open || mobile) && (
           <div className="min-w-0 flex-1">
             <p className="truncate font-bold text-sm font-display tracking-tight">{companyName}</p>

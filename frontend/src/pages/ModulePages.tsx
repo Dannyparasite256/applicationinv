@@ -4,7 +4,6 @@ import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
 import { getApiBaseUrl } from '@/lib/config';
 import { formatCurrency, formatDate, parseMoneyToBase, displayCurrencyCode } from '@/lib/utils';
-import { getMediaUrl, brandInitials } from '@/lib/media';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { useCurrencyStore } from '@/stores/currencyStore';

@@ -1,36 +1,12 @@
-import fs from 'fs';
-import path from 'path';
 import multer from 'multer';
 import { env } from '../config/env';
 
-const uploadRoot = path.resolve(process.cwd(), env.UPLOAD_DIR);
-const logosDir = path.join(uploadRoot, 'logos');
-
-try {
-  fs.mkdirSync(logosDir, { recursive: true });
-} catch {
-  /* ignore */
-}
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    try {
-      fs.mkdirSync(logosDir, { recursive: true });
-    } catch {
-      /* ignore */
-    }
-    cb(null, logosDir);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname || '').toLowerCase() || '.jpg';
-    const safeExt = ['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext) ? ext : '.jpg';
-    const companyId = (req as { companyId?: string }).companyId || 'company';
-    cb(null, `${companyId}-${Date.now()}${safeExt}`);
-  },
-});
-
+/**
+ * Memory storage so logos can be persisted as durable data URLs in the database.
+ * Disk under /uploads is ephemeral on platforms like Render and is wiped on redeploy.
+ */
 export const logoUpload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: Math.max(1, env.MAX_FILE_SIZE_MB || 5) * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (!file.mimetype?.startsWith('image/')) {
@@ -40,3 +16,18 @@ export const logoUpload = multer({
     cb(null, true);
   },
 });
+
+/** Build a data-URL from a multer memory file (or empty string if invalid). */
+export function fileToDataUrl(file: Express.Multer.File): string {
+  const mime = file.mimetype && file.mimetype.startsWith('image/') ? file.mimetype : 'image/jpeg';
+  const buf = file.buffer;
+  if (!buf || !buf.length) {
+    throw new Error('Empty image file');
+  }
+  // Cap stored logo size (~1.5MB base64 payload ≈ ~1.1MB raw) to keep DB/API responses healthy
+  const maxBytes = 1.5 * 1024 * 1024;
+  if (buf.length > maxBytes) {
+    throw new Error('Logo is too large. Please use an image under 1.5 MB.');
+  }
+  return `data:${mime};base64,${buf.toString('base64')}`;
+}
