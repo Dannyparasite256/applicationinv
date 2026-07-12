@@ -199,6 +199,7 @@ export async function registerCompany(input: {
       });
     }
 
+    // Company owners are active immediately — only staff/workers need manager approval.
     const user = await tx.user.create({
       data: {
         companyId: company.id,
@@ -208,7 +209,9 @@ export async function registerCompany(input: {
         firstName: input.firstName,
         lastName: input.lastName,
         phone: input.phone,
-        status: UserStatus.PENDING_VERIFICATION,
+        status: UserStatus.ACTIVE,
+        emailVerified: true,
+        emailVerifiedAt: new Date(),
       },
     });
 
@@ -387,10 +390,28 @@ export async function login(input: {
   }
 
   if (user.status === UserStatus.PENDING_VERIFICATION) {
-    await failLogin(user, 'pending_approval');
-    throw new ForbiddenError(
-      'Your staff account is waiting for manager approval. You cannot login until approved.'
-    );
+    const roleCodes = user.roles.map((r) => r.role.code);
+    const isBusinessOwner =
+      roleCodes.includes(RoleCode.COMPANY_OWNER) || roleCodes.includes(RoleCode.SUPER_ADMIN);
+
+    // Registered businesses / owners must never be blocked by staff-approval flow.
+    // Repair older accounts that were incorrectly created as PENDING_VERIFICATION.
+    if (isBusinessOwner) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          status: UserStatus.ACTIVE,
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
+      });
+      user.status = UserStatus.ACTIVE;
+    } else {
+      await failLogin(user, 'pending_approval');
+      throw new ForbiddenError(
+        'Your staff account is waiting for manager approval. You cannot login until approved.'
+      );
+    }
   }
 
   if (

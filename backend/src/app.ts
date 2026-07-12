@@ -21,6 +21,10 @@ export function createApp() {
   app.use(
     helmet({
       crossOriginResourcePolicy: { policy: 'cross-origin' },
+      // Dev/mobile: never force HTTPS upgrade — Capacitor uses cleartext HTTP
+      // to the PC LAN / USB reverse tunnel.
+      contentSecurityPolicy: env.NODE_ENV === 'production' ? undefined : false,
+      strictTransportSecurity: env.NODE_ENV === 'production' ? undefined : false,
     })
   );
   const corsOrigins = env.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean);

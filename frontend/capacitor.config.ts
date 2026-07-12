@@ -22,6 +22,11 @@ const config: CapacitorConfig = {
     backgroundColor: '#0f172a',
   },
   plugins: {
+    // Route fetch/XHR through native OkHttp so cleartext LAN/USB-reverse
+    // APIs work reliably (WebView networking often fails with ERR_NETWORK).
+    CapacitorHttp: {
+      enabled: true,
+    },
     SplashScreen: {
       launchShowDuration: 1500,
       launchAutoHide: true,

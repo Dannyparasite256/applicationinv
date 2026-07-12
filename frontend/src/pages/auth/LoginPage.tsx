@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import { Shield, Sparkles, WifiOff } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { login } from '@/services/auth.service';
 import { useAuthStore } from '@/stores/authStore';
 import { getErrorMessage } from '@/lib/api';
@@ -92,7 +92,7 @@ export function LoginPage() {
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1.5 flex items-center justify-center gap-1.5 flex-wrap">
             <Sparkles className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
-            Modern ERP · POS · Inventory · Offline-ready
+            Modern ERP · POS · Inventory
           </p>
         </div>
 
@@ -101,7 +101,7 @@ export function LoginPage() {
             <label className="text-sm font-medium mb-1.5 block text-slate-700 dark:text-slate-200">
               Email
             </label>
-            <Input type="email" autoComplete="username" placeholder="admin@demo.local" {...register('email')} />
+            <Input type="email" autoComplete="username" placeholder="you@company.com" {...register('email')} />
             {errors.email && <p className="text-xs text-red-600 mt-1">{errors.email.message}</p>}
           </div>
           <div>
@@ -138,29 +138,6 @@ export function LoginPage() {
             Create account
           </Link>
         </p>
-
-        <div className="mt-4 grid gap-2">
-          <div className="rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 p-3 text-xs text-slate-600 dark:text-slate-300 space-y-1.5">
-            <p className="font-medium text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-              <Shield className="h-3.5 w-3.5 text-blue-500" /> Staff login
-            </p>
-            <p>
-              Use the email and password your admin set under Staff Management. Credentials are
-              dynamic — admin can reset anytime.
-            </p>
-            <p className="pt-1 text-slate-400">
-              Demo: <span className="font-mono">admin@demo.local</span> /{' '}
-              <span className="font-mono">Admin@123</span>
-            </p>
-          </div>
-          <div className="rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800 p-3 text-xs text-amber-900 dark:text-amber-100 flex gap-2">
-            <WifiOff className="h-4 w-4 shrink-0 mt-0.5" />
-            <p>
-              Works offline for POS sales. Data syncs automatically when you reconnect — enable
-              notifications to get sync alerts.
-            </p>
-          </div>
-        </div>
 
         <button
           type="button"
