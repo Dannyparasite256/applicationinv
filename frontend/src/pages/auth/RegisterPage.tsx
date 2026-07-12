@@ -42,7 +42,7 @@ export function RegisterPage() {
   };
 
   return (
-    <div className="min-h-[100dvh] flex items-center justify-center p-4 overflow-y-auto">
+    <div className="auth-shell min-h-[100dvh] flex items-center justify-center p-4 overflow-y-auto">
       <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-background to-accent/10" />
       <Card className="relative w-full max-w-lg glass">
         <CardHeader>

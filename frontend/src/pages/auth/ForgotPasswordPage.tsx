@@ -109,7 +109,7 @@ export function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-[100dvh] w-full max-w-[100vw] relative flex items-center justify-center p-3 sm:p-4 overflow-x-hidden overflow-y-auto">
+    <div className="auth-shell min-h-[100dvh] w-full max-w-[100vw] relative flex items-center justify-center p-3 sm:p-4 overflow-x-hidden overflow-y-auto">
       <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900" />
       <div
         className="absolute inset-0 opacity-20"

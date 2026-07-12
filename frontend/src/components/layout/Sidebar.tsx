@@ -150,14 +150,15 @@ export function Sidebar({ open, onToggle, mobile, onNavigate }: SidebarProps) {
       className={cn(
         'flex flex-col border-r border-border/80 bg-card/95 backdrop-blur-2xl transition-all duration-300 z-40 min-h-0',
         mobile
-          ? 'fixed inset-y-0 left-0 w-[min(16.5rem,86vw)] max-w-full shadow-elevated pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]'
+          ? 'fixed inset-y-0 left-0 w-[min(16.5rem,88vw)] max-w-full shadow-elevated pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)] pl-[env(safe-area-inset-left,0px)]'
           : open
             ? 'w-[14.5rem]'
             : 'w-[4rem]',
         mobile && !open && '-translate-x-full'
       )}
     >
-      <div className="app-topbar flex items-center gap-2.5 border-b border-border/80 px-3 shrink-0">
+      <div className="app-topbar border-b border-border/80 shrink-0">
+        <div className="app-topbar-inner gap-2.5 px-3">
         <div className="brand-mark h-9 w-9 text-xs ring-2 ring-primary/10 shrink-0">
           {logoSrc ? (
             <img src={logoSrc} alt={companyName} className="h-full w-full object-cover" />
@@ -182,6 +183,7 @@ export function Sidebar({ open, onToggle, mobile, onNavigate }: SidebarProps) {
             <ChevronLeft className={cn('h-4 w-4 transition-transform', !open && 'rotate-180')} />
           </button>
         )}
+        </div>
       </div>
 
       <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-2 space-y-0.5 overscroll-contain">

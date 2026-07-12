@@ -186,10 +186,8 @@
     letter-spacing: normal;
   }
 
-  /* Capacitor Android / iOS safe areas */
+  /* Capacitor Android / iOS — safe areas handled by chrome (topbar/shell), not body */
   .native-app body {
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
     -webkit-tap-highlight-color: transparent;
     overscroll-behavior: none;
   }
@@ -198,6 +196,15 @@
   .native-app a,
   .native-app [role='button'] {
     touch-action: manipulation;
+  }
+
+  /* Extra-small phones (≤360px) — denser chrome */
+  @media (max-width: 360px) {
+    :root {
+      --app-topbar-h: 2.875rem;
+      --page-pad-x: 0.5rem;
+      --control-h: 2.125rem;
+    }
   }
 }
 
@@ -395,10 +402,40 @@
     background-size: auto, auto;
   }
 
-  /* Topbar height token for POS full-height panes */
+  /**
+   * Adaptive top navigation:
+   * - min content height from --app-topbar-h
+   * - pads under notch / status bar / camera cutout via safe-area-inset-*
+   * - stays fully visible on tall, short, and narrow phones
+   */
   .app-topbar {
-    height: var(--app-topbar-h);
+    box-sizing: border-box;
+    min-height: calc(var(--app-topbar-h) + env(safe-area-inset-top, 0px));
+    height: auto;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-left: max(0.25rem, env(safe-area-inset-left, 0px));
+    padding-right: max(0.25rem, env(safe-area-inset-right, 0px));
+    /* solid enough that scrolling content never washes out the bar */
+    background-color: hsl(var(--background) / 0.97);
+  }
+
+  .app-topbar-inner {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
     min-height: var(--app-topbar-h);
+    height: var(--app-topbar-h);
+    gap: 0.25rem;
+  }
+
+  /* Full topbar chrome height including status bar (POS / fixed panes) */
+  .native-app {
+    --app-topbar-total: calc(var(--app-topbar-h) + env(safe-area-inset-top, 0px));
+  }
+
+  :root {
+    --app-topbar-total: calc(var(--app-topbar-h) + env(safe-area-inset-top, 0px));
   }
 
   /* Soft empty-state for lists */
@@ -460,8 +497,9 @@
 
 /* Native: slightly denser chrome + safe padding */
 .native-app .page-container {
-  padding-left: max(var(--page-pad-x), env(safe-area-inset-left));
-  padding-right: max(var(--page-pad-x), env(safe-area-inset-right));
+  padding-left: max(var(--page-pad-x), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--page-pad-x), env(safe-area-inset-right, 0px));
+  padding-bottom: max(1rem, calc(env(safe-area-inset-bottom, 0px) + 0.75rem));
 }
 
 .native-app {
@@ -470,11 +508,29 @@
   --page-gap: 0.5rem;
 }
 
+/* Auth screens also respect notch / home indicator */
+.native-app .auth-shell {
+  padding-top: max(1rem, env(safe-area-inset-top, 0px));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+  padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+  padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+  min-height: 100dvh;
+  box-sizing: border-box;
+}
+
 @media (min-width: 640px) {
   .native-app {
     --page-pad-x: 0.875rem;
     --page-pad-y: 0.75rem;
     --page-gap: 0.75rem;
+  }
+}
+
+/* Ensure interactive topbar controls stay tappable on all densities */
+@media (max-width: 640px) {
+  .app-topbar .topbar-action {
+    min-width: 2.5rem;
+    min-height: 2.5rem;
   }
 }
 

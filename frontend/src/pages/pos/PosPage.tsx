@@ -480,7 +480,7 @@ export function PosPage() {
       : 0;
 
   return (
-    <div className="h-[calc(100dvh-var(--app-topbar-h))] max-h-[calc(100dvh-var(--app-topbar-h))] flex flex-col lg:flex-row min-h-0 min-w-0 w-full max-w-full overflow-hidden">
+    <div className="h-[calc(100dvh-var(--app-topbar-total,var(--app-topbar-h)))] max-h-[calc(100dvh-var(--app-topbar-total,var(--app-topbar-h)))] flex flex-col lg:flex-row min-h-0 min-w-0 w-full max-w-full overflow-hidden">
       {lastSaleId && (
         <PrintShareDialog
           open={printOpen}

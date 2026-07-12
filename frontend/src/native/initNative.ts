@@ -39,6 +39,13 @@ export async function initNativeApp(): Promise<void> {
   await safe('status-bar', async () => {
     if (!Capacitor.isNativePlatform()) return;
     const { StatusBar, Style } = await import('@capacitor/status-bar');
+    // Draw under the status bar; CSS safe-area-inset-* keeps top nav readable
+    // on notched / punch-hole / small Android screens.
+    try {
+      await StatusBar.setOverlaysWebView({ overlay: true });
+    } catch {
+      /* some OEMs ignore this */
+    }
     await StatusBar.setStyle({ style: Style.Dark });
     await StatusBar.setBackgroundColor({ color: '#0f172a' });
   });
