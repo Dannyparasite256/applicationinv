@@ -123,8 +123,11 @@ export function LoginPage() {
             </motion.div>
           )}
           <div className="flex justify-end">
-            <Link to="/forgot-password" className="text-sm text-blue-600 hover:underline">
-              Forgot password?
+            <Link
+              to="/forgot-password"
+              className="text-sm font-semibold text-blue-600 hover:underline"
+            >
+              Forgot password? Get a 6-digit email code
             </Link>
           </div>
           <Button type="submit" className="w-full h-11 text-base shadow-lg shadow-blue-600/20" loading={isSubmitting}>

@@ -43,6 +43,7 @@ export function ForgotPasswordPage() {
   const [step, setStep] = useState<'email' | 'code'>('email');
   const [email, setEmail] = useState('');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [delivery, setDelivery] = useState<'email' | 'preview' | null>(null);
   const [resending, setResending] = useState(false);
 
   const emailForm = useForm<EmailForm>({
@@ -57,17 +58,27 @@ export function ForgotPasswordPage() {
 
   const sendCode = async (values: EmailForm) => {
     const result = await forgotPassword(values.email.trim());
-    const data = (result as { data?: { previewUrl?: string; message?: string } })?.data;
+    const data = (
+      result as {
+        data?: {
+          previewUrl?: string;
+          message?: string;
+          delivery?: 'email' | 'preview';
+        };
+      }
+    )?.data;
     setEmail(values.email.trim().toLowerCase());
     setPreviewUrl(data?.previewUrl || null);
+    setDelivery(data?.delivery || (data?.previewUrl ? 'preview' : 'email'));
     setStep('code');
     resetForm.reset({ code: '', password: '', confirm: '' });
     toast.success(data?.message || 'Reset code sent — check your email');
     if (data?.previewUrl) {
-      toast.message('Dev email preview ready', {
-        description: 'Tap to open the test inbox',
+      toast.message('Open the email preview to copy your 6-digit code', {
+        description: 'No real SMTP configured yet — use the preview link',
+        duration: 10_000,
         action: {
-          label: 'Open',
+          label: 'Open email',
           onClick: () => window.open(data.previewUrl!, '_blank'),
         },
       });
@@ -134,8 +145,10 @@ export function ForgotPasswordPage() {
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1.5">
             {step === 'email'
-              ? 'We’ll email you a 6-digit code to set a new password.'
-              : `Code sent to ${email}. Check inbox & spam.`}
+              ? 'We email you a 6-digit code. Enter it here to set a new password.'
+              : delivery === 'preview'
+                ? `Code ready for ${email}. Open the email preview below to copy it.`
+                : `Code sent to ${email}. Check inbox and spam.`}
           </p>
         </div>
 
@@ -273,14 +286,24 @@ export function ForgotPasswordPage() {
               </div>
 
               {previewUrl && (
-                <a
-                  href={previewUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="block text-center text-xs text-indigo-600 hover:underline"
-                >
-                  Open dev email preview
-                </a>
+                <div className="rounded-xl border border-indigo-200 bg-indigo-50 dark:bg-indigo-950/40 dark:border-indigo-800 p-3 space-y-2">
+                  <p className="text-xs text-indigo-900 dark:text-indigo-100 font-medium">
+                    Your 6-digit code is inside this email message. Open it, copy the code, paste it above.
+                  </p>
+                  <a
+                    href={previewUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-center gap-2 w-full h-10 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-500"
+                  >
+                    <Mail className="h-4 w-4" /> Open email with code
+                  </a>
+                </div>
+              )}
+              {delivery === 'email' && !previewUrl && (
+                <p className="text-[11px] text-center text-slate-500">
+                  Didn’t get it? Check spam, wait a minute, then use Resend code.
+                </p>
               )}
             </motion.form>
           )}

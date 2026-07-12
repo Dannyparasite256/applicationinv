@@ -76,12 +76,13 @@ function createJsonTransport(): Transporter {
 
 /**
  * Resolve transporter:
- * - EMAIL_ENABLED=false → null
- * - SMTP_HOST set → real SMTP
- * - else → Ethereal (dev preview inbox) so "send" still works
+ * - force=true (password reset): always try SMTP → Ethereal → JSON outbox
+ * - EMAIL_ENABLED=false and not force → null
+ * - SMTP_HOST set → real SMTP (Gmail, Resend, etc.)
+ * - else → Ethereal test inbox (preview URL) so resets still work without SMTP
  */
-async function getTransporter(): Promise<Transporter | null> {
-  if (!env.EMAIL_ENABLED) return null;
+async function getTransporter(force = false): Promise<Transporter | null> {
+  if (!env.EMAIL_ENABLED && !force) return null;
   if (transporter) return transporter;
   if (initPromise) return initPromise;
 
@@ -139,25 +140,27 @@ export async function sendEmail(options: {
   replyTo?: string;
   cc?: string | string[];
   bcc?: string | string[];
+  /** Critical mail (password reset) — send even when EMAIL_ENABLED=false */
+  force?: boolean;
 }): Promise<SendEmailResult> {
   const to = options.to?.trim();
   if (!to) {
     return { sent: false, to: '', subject: options.subject, mode: 'disabled', reason: 'No recipient' };
   }
 
-  if (!env.EMAIL_ENABLED) {
+  if (!env.EMAIL_ENABLED && !options.force) {
     logger.info('Email skipped (EMAIL_ENABLED=false)', { to, subject: options.subject });
     return {
       sent: false,
       to,
       subject: options.subject,
       mode: 'disabled',
-      reason: 'Email is disabled. Set EMAIL_ENABLED=true in .env',
+      reason: 'Email is disabled. Set EMAIL_ENABLED=true in .env (and SMTP_HOST for real delivery)',
       preview: options.text || options.html.replace(/<[^>]+>/g, ' ').slice(0, 500),
     };
   }
 
-  const transport = await getTransporter();
+  const transport = await getTransporter(Boolean(options.force));
   if (!transport) {
     return {
       sent: false,
@@ -290,7 +293,9 @@ export async function sendPasswordResetEmail(
 ): Promise<SendEmailResult> {
   const code = otp || token.split('.')[0] || token.slice(0, 6);
   const url = `${env.APP_URL.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(token)}`;
+  // Password resets always attempt delivery (even if EMAIL_ENABLED=false)
   return sendEmail({
+    force: true,
     to: email,
     subject: `${env.APP_NAME} — Your password reset code is ${code}`,
     html: brandTemplate({
@@ -298,21 +303,23 @@ export async function sendPasswordResetEmail(
       bodyHtml: `
         <p>We received a request to reset your password for <strong>${email}</strong>.</p>
         <p style="margin:8px 0 4px;color:#64748b;font-size:13px;text-transform:uppercase;letter-spacing:.06em;font-weight:600">
-          Your reset code
+          Your 6-digit reset code
         </p>
         <div style="margin:8px 0 20px;padding:16px 20px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;text-align:center">
           <span style="font-size:32px;font-weight:800;letter-spacing:0.35em;color:#1d4ed8;font-family:ui-monospace,SFMono-Regular,Menlo,monospace">
             ${code}
           </span>
         </div>
-        <p style="margin:0 0 16px">Enter this code in the app on the <strong>Forgot password</strong> screen, then choose a new password.</p>
+        <p style="margin:0 0 16px">
+          Enter this <strong>6-digit code</strong> on the <strong>Forgot password</strong> screen, then choose a new password.
+        </p>
         <p style="margin:24px 0">
           <a href="${url}" style="background:#2563eb;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">
             Or open reset link
           </a>
         </p>
         <p style="color:#64748b;font-size:13px;margin:0">
-          This code expires in <strong>1 hour</strong>. If you did not request a reset, you can ignore this email — your password will not change.
+          This code expires in <strong>1 hour</strong>. If you did not request a reset, ignore this email — your password will not change.
         </p>
       `,
     }),
@@ -321,8 +328,8 @@ export async function sendPasswordResetEmail(
       ``,
       `Your ${env.APP_NAME} password reset code is: ${code}`,
       ``,
-      `Enter this code in the app (Forgot password → enter code), or open:`,
-      url,
+      `Enter this 6-digit code on Forgot password, then set a new password.`,
+      `Or open: ${url}`,
       ``,
       `This code expires in 1 hour. If you did not request this, ignore this email.`,
     ].join('\n'),

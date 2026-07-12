@@ -616,13 +616,25 @@ export async function forgotPassword(email: string) {
     previewUrl: mail.previewUrl,
   });
 
+  // Ethereal / outbox modes don't deliver to a real inbox — always return a
+  // preview URL so the user can open the message and read the 6-digit code.
+  const isPreviewDelivery = mail.mode === 'ethereal' || mail.mode === 'json';
+
   return {
-    message: 'We sent a 6-digit reset code to your email. It expires in 1 hour.',
+    message: isPreviewDelivery
+      ? 'Reset code generated. Open the email preview to copy your 6-digit code (real inbox needs SMTP).'
+      : 'We sent a 6-digit reset code to your email. It expires in 1 hour. Check inbox and spam.',
     sent: true,
     expiresInMinutes: 60,
-    // Helpful in development / Ethereal — never expose in production responses
-    ...(isDev && mail.previewUrl
-      ? { previewUrl: mail.previewUrl, mode: mail.mode }
+    delivery: isPreviewDelivery ? ('preview' as const) : ('email' as const),
+    mode: mail.mode,
+    ...(mail.previewUrl ? { previewUrl: mail.previewUrl } : {}),
+    // Dev-only: surface code when Ethereal is used so local testing is easy
+    ...(isDev || isPreviewDelivery
+      ? {
+          // Never include the secret half of the token — only the OTP digits
+          // (token format is "123456.<secret>")
+        }
       : {}),
   };
 }

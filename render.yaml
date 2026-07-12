@@ -58,8 +58,11 @@ services:
         generateValue: true
       - key: APP_NAME
         value: Enterprise IMS
+      # Password-reset codes always try to send (force). Set real SMTP for inbox delivery:
+      #   SMTP_HOST=smtp.gmail.com  SMTP_PORT=587  SMTP_USER=...  SMTP_PASS=app-password
+      # Without SMTP, Ethereal test mail is used and a preview URL is returned.
       - key: EMAIL_ENABLED
-        value: "false"
+        value: "true"
       - key: SMS_ENABLED
         value: "false"
       - key: OAUTH_GOOGLE_ENABLED
