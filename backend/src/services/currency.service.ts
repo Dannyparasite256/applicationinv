@@ -296,6 +296,66 @@ export async function ensureCompanyCurrencies(companyId: string) {
   }
 }
 
+const STALE_MS = 30 * 60 * 1000; // re-pull live FX if older than 30 minutes
+
+function mapCurrencyRows(
+  rows: Array<{
+    id: string;
+    code: string;
+    name: string;
+    symbol: string;
+    exchangeRate: unknown;
+    isBase: boolean;
+    isActive: boolean;
+    lastSyncedAt: Date | null;
+  }>,
+  baseCurrency: string
+) {
+  return rows.map((r) => {
+    const exchangeRate = Number(r.exchangeRate) || 0;
+    // Stored: units of base per 1 unit of this code (for convert math).
+    // marketRate: units of this code per 1 base (matches ExchangeRate-API display).
+    const marketRate =
+      r.isBase || r.code.toUpperCase() === baseCurrency
+        ? 1
+        : exchangeRate > 0
+          ? 1 / exchangeRate
+          : 0;
+    return {
+      id: r.id,
+      code: r.code,
+      name: r.name,
+      symbol: r.symbol,
+      exchangeRate,
+      marketRate,
+      isBase: r.isBase,
+      isActive: r.isActive,
+      lastSyncedAt: r.lastSyncedAt,
+    };
+  });
+}
+
+function ratesLookStale(
+  rows: Array<{ isBase: boolean; exchangeRate: unknown; lastSyncedAt: Date | null }>,
+  base: string
+): boolean {
+  if (!rows.length) return true;
+  const nonBase = rows.filter((r) => !r.isBase);
+  if (!nonBase.length) return true;
+  // Seed defaults leave every rate at 1 — must refresh from API
+  const allOnes = nonBase.every((r) => {
+    const n = Number(r.exchangeRate);
+    return !n || Math.abs(n - 1) < 1e-9;
+  });
+  if (allOnes) return true;
+  const latest = rows.reduce<number>((max, r) => {
+    const t = r.lastSyncedAt ? new Date(r.lastSyncedAt).getTime() : 0;
+    return t > max ? t : max;
+  }, 0);
+  if (!latest) return true;
+  return Date.now() - latest > STALE_MS;
+}
+
 export async function listCurrencies(companyId: string | null | undefined) {
   const cid = requireCompany(companyId);
   await ensureCompanyCurrencies(cid);
@@ -303,24 +363,35 @@ export async function listCurrencies(companyId: string | null | undefined) {
     where: { id: cid },
     select: { currency: true, name: true },
   });
-  const rows = await prisma.currency.findMany({
+  const baseCurrency = (company?.currency || 'USD').toUpperCase();
+  let rows = await prisma.currency.findMany({
     where: { companyId: cid },
     orderBy: [{ isBase: 'desc' }, { code: 'asc' }],
   });
+
+  let liveSource: string | null = null;
+  let liveDate: string | null = null;
+
+  // Pull ExchangeRate-API (or fallbacks) whenever rates are missing/stale
+  if (ratesLookStale(rows, baseCurrency)) {
+    try {
+      const refreshed = await refreshRates(cid);
+      return refreshed;
+    } catch (e) {
+      logger.warn('Auto FX refresh on list failed', {
+        companyId: cid,
+        e: e instanceof Error ? e.message : e,
+      });
+    }
+  }
+
   return {
-    baseCurrency: (company?.currency || 'USD').toUpperCase(),
+    baseCurrency,
     companyName: company?.name,
-    currencies: rows.map((r) => ({
-      id: r.id,
-      code: r.code,
-      name: r.name,
-      symbol: r.symbol,
-      exchangeRate: Number(r.exchangeRate),
-      isBase: r.isBase,
-      isActive: r.isActive,
-      lastSyncedAt: r.lastSyncedAt,
-    })),
+    currencies: mapCurrencyRows(rows, baseCurrency),
     catalog: WORLD_CURRENCIES,
+    liveSource,
+    liveDate,
   };
 }
 
@@ -359,9 +430,35 @@ export async function refreshRates(companyId: string | null | undefined) {
   // Auto-add any live currencies already in catalog that company has not enabled
   // (optional: only update existing — user enables via POST)
 
-  logger.info('FX rates refreshed', { companyId: cid, base, source: live.source, count: existing.length });
-  const list = await listCurrencies(cid);
-  return { ...list, liveSource: live.source, liveDate: live.date };
+  logger.info('FX rates refreshed', {
+    companyId: cid,
+    base,
+    source: live.source,
+    count: existing.length,
+    sample: Object.fromEntries(
+      ['USD', 'EUR', 'UGX', 'KES', 'GBP']
+        .filter((c) => c !== base && live.rates[c])
+        .map((c) => [c, { toBase: live.rates[c], market: 1 / live.rates[c] }])
+    ),
+  });
+
+  // Re-read rows (do not call listCurrencies — that can recurse into refresh)
+  const rows = await prisma.currency.findMany({
+    where: { companyId: cid },
+    orderBy: [{ isBase: 'desc' }, { code: 'asc' }],
+  });
+  const companyRow = await prisma.company.findUnique({
+    where: { id: cid },
+    select: { currency: true, name: true },
+  });
+  return {
+    baseCurrency: base,
+    companyName: companyRow?.name,
+    currencies: mapCurrencyRows(rows, base),
+    catalog: WORLD_CURRENCIES,
+    liveSource: live.source,
+    liveDate: live.date,
+  };
 }
 
 export async function setBaseCurrency(companyId: string | null | undefined, newBase: string) {

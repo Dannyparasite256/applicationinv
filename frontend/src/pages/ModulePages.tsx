@@ -7,6 +7,7 @@ import { formatCurrency, formatDate } from '@/lib/utils';
 import { getMediaUrl, brandInitials } from '@/lib/media';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
+import { useCurrencyStore } from '@/stores/currencyStore';
 import { canRefundOrDeleteSales } from '@/lib/roleAccess';
 import { APP_FONTS, type AppFontId } from '@/lib/fonts';
 import { Button } from '@/components/ui/Button';
@@ -2049,11 +2050,15 @@ export function SettingsPage() {
         name: string;
         symbol: string;
         exchangeRate: number;
+        /** Units of this code per 1 base (ExchangeRate-API style) */
+        marketRate?: number;
         isBase: boolean;
         isActive: boolean;
         lastSyncedAt?: string | null;
       }>;
       catalog: Array<{ code: string; name: string; symbol: string }>;
+      liveSource?: string | null;
+      liveDate?: string | null;
     },
   });
 
@@ -2126,7 +2131,16 @@ export function SettingsPage() {
     mutationFn: async () => (await api.post('/currencies/refresh')).data.data,
     onSuccess: (d) => {
       toast.success(`Live rates updated${d?.liveSource ? ` · ${d.liveSource}` : ''}`);
+      // Push into app-wide currency store so POS/top-bar convert immediately
+      if (d?.baseCurrency && d?.currencies) {
+        useCurrencyStore.getState().setFromApi({
+          baseCurrency: d.baseCurrency,
+          currencies: d.currencies,
+          liveSource: d.liveSource,
+        });
+      }
       qc.invalidateQueries({ queryKey: ['currencies'] });
+      void refetchCurrencies();
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });
@@ -2394,8 +2408,18 @@ export function SettingsPage() {
             <div>
               <CardTitle className="text-base">Currencies & live FX rates</CardTitle>
               <CardDescription>
-                Base: <strong>{currencyData?.baseCurrency || profile.currency}</strong> · Toggle display currency from
-                the top bar — all amounts convert in real time
+                Base: <strong>{currencyData?.baseCurrency || profile.currency}</strong>
+                {currencyData?.liveSource ? (
+                  <>
+                    {' '}
+                    · Source: <strong>{currencyData.liveSource}</strong>
+                  </>
+                ) : null}
+                {currencyData?.liveDate ? (
+                  <> · Feed date: {String(currencyData.liveDate).slice(0, 25)}</>
+                ) : null}
+                <br />
+                Rates from ExchangeRate-API. Tap refresh if numbers look stuck at 1.
               </CardDescription>
             </div>
             <Button size="sm" loading={refreshFx.isPending} onClick={() => refreshFx.mutate()}>
@@ -2429,30 +2453,50 @@ export function SettingsPage() {
                     <th className="p-2">Code</th>
                     <th className="p-2">Name</th>
                     <th className="p-2">Symbol</th>
-                    <th className="p-2">Rate → base</th>
+                    <th className="p-2">Market rate (API)</th>
                     <th className="p-2">Synced</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {(currencyData?.currencies || []).map((c) => (
-                    <tr key={c.code} className="border-t border-border">
-                      <td className="p-2 font-mono font-semibold">
-                        {c.code}
-                        {c.isBase ? (
-                          <span className="ml-1 text-[10px] text-primary">BASE</span>
-                        ) : null}
-                      </td>
-                      <td className="p-2">{c.name}</td>
-                      <td className="p-2">{c.symbol}</td>
-                      <td className="p-2 tabular-nums">
-                        1 {c.code} = {Number(c.exchangeRate).toFixed(6)}{' '}
-                        {currencyData?.baseCurrency || 'BASE'}
-                      </td>
-                      <td className="p-2 text-xs text-muted-foreground">
-                        {c.lastSyncedAt ? new Date(c.lastSyncedAt).toLocaleString() : '—'}
-                      </td>
-                    </tr>
-                  ))}
+                  {(currencyData?.currencies || []).map((c) => {
+                    const base = currencyData?.baseCurrency || 'BASE';
+                    const market =
+                      typeof c.marketRate === 'number' && c.marketRate > 0
+                        ? c.marketRate
+                        : c.isBase
+                          ? 1
+                          : Number(c.exchangeRate) > 0
+                            ? 1 / Number(c.exchangeRate)
+                            : 0;
+                    return (
+                      <tr key={c.code} className="border-t border-border">
+                        <td className="p-2 font-mono font-semibold">
+                          {c.code}
+                          {c.isBase ? (
+                            <span className="ml-1 text-[10px] text-primary">BASE</span>
+                          ) : null}
+                        </td>
+                        <td className="p-2">{c.name}</td>
+                        <td className="p-2">{c.symbol}</td>
+                        <td className="p-2 tabular-nums">
+                          {c.isBase ? (
+                            <span>1 {c.code} = 1 {base}</span>
+                          ) : (
+                            <span>
+                              1 {base} ={' '}
+                              {market >= 100
+                                ? market.toLocaleString(undefined, { maximumFractionDigits: 2 })
+                                : market.toLocaleString(undefined, { maximumFractionDigits: 6 })}{' '}
+                              {c.code}
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-2 text-xs text-muted-foreground">
+                          {c.lastSyncedAt ? new Date(c.lastSyncedAt).toLocaleString() : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

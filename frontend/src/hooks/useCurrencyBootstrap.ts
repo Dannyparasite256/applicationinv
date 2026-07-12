@@ -23,12 +23,13 @@ export function useCurrencyBootstrap() {
   const query = useQuery({
     queryKey: ['currencies', companyId],
     queryFn: async () => {
+      // GET auto-refreshes stale rates on the server via ExchangeRate-API
       const res = await api.get<{ data: CurrencyApi }>('/currencies');
       return res.data.data;
     },
     enabled: !!token && !!companyId,
-    staleTime: 30_000,
-    refetchInterval: online ? 5 * 60_000 : false, // soft refresh every 5 min
+    staleTime: 60_000,
+    refetchInterval: online ? 15 * 60_000 : false, // re-check every 15 min
   });
 
   useEffect(() => {
@@ -91,24 +92,29 @@ export function useCurrencyBootstrap() {
     [qc, setFromApi]
   );
 
-  // Auto refresh rates when coming online
+  // Force a live ExchangeRate-API pull when session comes online
   useEffect(() => {
-    if (online && token && companyId) {
-      void api
-        .post('/currencies/refresh')
-        .then((res) => {
-          const data = res.data.data as CurrencyApi;
-          setFromApi({
-            baseCurrency: data.baseCurrency,
-            currencies: data.currencies,
-            liveSource: data.liveSource,
-          });
-        })
-        .catch(() => {
-          /* keep cached rates */
+    if (!online || !token || !companyId) return;
+    let cancelled = false;
+    void api
+      .post('/currencies/refresh')
+      .then((res) => {
+        if (cancelled) return;
+        const data = res.data.data as CurrencyApi;
+        setFromApi({
+          baseCurrency: data.baseCurrency,
+          currencies: data.currencies,
+          liveSource: data.liveSource,
         });
-    }
-  }, [online, token, companyId, setFromApi]);
+        void qc.invalidateQueries({ queryKey: ['currencies'] });
+      })
+      .catch(() => {
+        /* keep cached rates — GET list may still auto-refresh if stale */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [online, token, companyId, setFromApi, qc]);
 
   return {
     ...query,
