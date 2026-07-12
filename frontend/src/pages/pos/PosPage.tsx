@@ -27,6 +27,7 @@ import {
 import { Link, useNavigate } from 'react-router-dom';
 import { api, getErrorMessage } from '@/lib/api';
 import { formatCurrency, parseMoneyToBase, displayCurrencyCode } from '@/lib/utils';
+import { getMediaUrl } from '@/lib/media';
 import { usePosStore } from '@/stores/posStore';
 import { useNetworkStore } from '@/stores/networkStore';
 import { useCurrencyStore } from '@/stores/currencyStore';
@@ -53,6 +54,7 @@ interface Product {
   sellingPrice: string | number;
   trackInventory: boolean;
   stockQty?: number;
+  imageUrl?: string | null;
   tax?: { rate: string | number } | null;
 }
 
@@ -894,12 +896,28 @@ export function PosPage() {
                   onClick={() => addProduct(p)}
                   className="w-full p-2 sm:p-3 text-left hover:border-primary"
                 >
-                  <p className="font-medium text-xs sm:text-sm line-clamp-2 min-h-[2.25rem] break-safe pr-6">
-                    {p.name}
-                  </p>
-                  <p className="text-[10px] sm:text-xs text-muted-foreground font-mono mt-0.5 truncate">
-                    {p.sku}
-                  </p>
+                  <div className="flex gap-2 items-start pr-5">
+                    {p.imageUrl ? (
+                      <img
+                        src={getMediaUrl(p.imageUrl) || ''}
+                        alt=""
+                        className="h-10 w-10 sm:h-11 sm:w-11 rounded-lg object-cover border border-border shrink-0 bg-muted"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-lg bg-muted/80 border border-border shrink-0 flex items-center justify-center text-[10px] font-bold text-muted-foreground">
+                        {p.name.slice(0, 2).toUpperCase()}
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-xs sm:text-sm line-clamp-2 min-h-[2.25rem] break-safe">
+                        {p.name}
+                      </p>
+                      <p className="text-[10px] sm:text-xs text-muted-foreground font-mono mt-0.5 truncate">
+                        {p.sku}
+                      </p>
+                    </div>
+                  </div>
                   <div className="mt-2 flex items-center justify-between">
                     <span className="font-bold text-primary">
                       {formatCurrency(Number(p.sellingPrice))}

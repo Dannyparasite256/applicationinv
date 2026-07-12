@@ -8,6 +8,8 @@ export interface CachedProduct {
   sellingPrice: string | number;
   trackInventory: boolean;
   stockQty?: number;
+  /** Durable data URL or path — same photo on all devices */
+  imageUrl?: string | null;
   tax?: { rate: string | number } | null;
   isActive?: boolean;
 }

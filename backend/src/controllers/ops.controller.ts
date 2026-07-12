@@ -569,21 +569,24 @@ export const uploadFile = asyncHandler(async (req: Request, res: Response) => {
     return res.status(400).json({ success: false, message: 'No file uploaded' });
   }
 
-  // Images: store as data URL so product/profile images survive server redeploys
+  // Images: data URL in response → client saves on Product.imageUrl / Company.logoUrl.
+  // Lives in Postgres so phone, desktop, and website all show the same photo after sync.
   if (file.mimetype?.startsWith('image/') && file.buffer?.length) {
-    const maxBytes = 2 * 1024 * 1024;
+    const maxBytes = 2.5 * 1024 * 1024;
     if (file.buffer.length > maxBytes) {
       return res.status(400).json({
         success: false,
-        message: 'Image is too large. Please use a file under 2 MB.',
+        message: 'Image is too large. Please use a file under 2.5 MB (or use a smaller photo).',
       });
     }
-    const url = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+    const mime = file.mimetype.startsWith('image/') ? file.mimetype : 'image/jpeg';
+    const url = `data:${mime};base64,${file.buffer.toString('base64')}`;
     return created(res, {
       url,
       filename: file.originalname || 'image',
       size: file.size,
-      mimetype: file.mimetype,
+      mimetype: mime,
+      durable: true,
     });
   }
 

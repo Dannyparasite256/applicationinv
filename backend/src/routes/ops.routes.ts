@@ -261,6 +261,12 @@ router.get('/taxes', ops.listTaxes);
 router.post('/taxes', requirePermissions('settings.company'), ops.createTax);
 router.get('/units', ops.listUnits);
 
-router.post('/uploads', requirePermissions('inventory.products.create'), ops.upload.single('file'), ops.uploadFile);
+// Product photos (stored as durable data URLs so web / Android / desktop all see the same image)
+router.post(
+  '/uploads',
+  requireAnyPermission('inventory.products.create', 'inventory.products.update'),
+  ops.upload.single('file'),
+  ops.uploadFile
+);
 
 export default router;

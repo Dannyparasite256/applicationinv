@@ -24,7 +24,10 @@
     "render:build:web": "npm install --include=dev && npm run build -w frontend",
     "docker:up": "docker compose up -d --build",
     "docker:down": "docker compose down",
-    "lint": "npm run lint -w backend && npm run lint -w frontend"
+    "lint": "npm run lint -w backend && npm run lint -w frontend",
+    "desktop:install": "npm install --prefix desktop",
+    "desktop:build": "node desktop/build-win.cjs",
+    "desktop:start": "npm start --prefix desktop"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

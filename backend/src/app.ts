@@ -73,8 +73,9 @@ export function createApp() {
     })
   );
   app.use(compression());
-  app.use(express.json({ limit: '2mb' }));
-  app.use(express.urlencoded({ extended: true }));
+  // Product/logo photos are stored as data URLs in JSON bodies (durable multi-device sync)
+  app.use(express.json({ limit: '12mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '12mb' }));
   app.use(cookieParser());
   app.use(globalRateLimiter);
 

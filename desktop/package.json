@@ -1,0 +1,77 @@
+{
+  "name": "enterprise-ims-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Enterprise IMS Windows desktop app (Electron)",
+  "main": "main.cjs",
+  "author": "Enterprise IMS",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --win portable --x64",
+    "dist": "electron-builder --win portable nsis --x64"
+  },
+  "build": {
+    "appId": "com.enterprise.ims.desktop",
+    "productName": "Enterprise IMS",
+    "copyright": "Copyright © Enterprise IMS",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "icon": "build/icon.png",
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "package.json",
+      "build/icon.png",
+      "build/icon.ico"
+    ],
+    "extraResources": [
+      {
+        "from": "../frontend/dist",
+        "to": "app-dist",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      }
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        },
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "Enterprise-IMS-Setup-${version}.${ext}",
+      "signAndEditExecutable": false,
+      "signDlls": false
+    },
+    "forceCodeSigning": false,
+    "portable": {
+      "artifactName": "Enterprise-IMS-Portable.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Enterprise IMS",
+      "artifactName": "Enterprise-IMS-Setup-${version}.exe"
+    },
+    "compression": "maximum",
+    "asar": true,
+    "electronDist": "node_modules/electron/dist"
+  },
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  }
+}

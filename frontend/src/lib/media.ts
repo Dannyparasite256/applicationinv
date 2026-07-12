@@ -1,8 +1,9 @@
 import { getApiBaseUrl } from '@/lib/config';
 
 /**
- * Resolve company logos / uploaded assets for web + Android.
- * API base is like http://host:4000/api/v1 — media lives on the API origin at /uploads/...
+ * Resolve company logos / product photos for web, Android, and desktop.
+ * - data: / blob: / https: returned as-is (durable images live as data URLs in the DB)
+ * - /uploads/... paths → API origin (legacy disk; may disappear after redeploy)
  */
 export function getMediaUrl(path?: string | null): string | null {
   if (!path) return null;

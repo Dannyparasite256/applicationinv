@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
 import { formatCurrency, moneyInputFromBase, parseMoneyToBase } from '@/lib/utils';
 import { getMediaUrl } from '@/lib/media';
+import { compressImageToDataUrl } from '@/lib/imageCompress';
 import { printProductLabel } from '@/lib/labelPrint';
 import { scanBarcode, canUseCameraScan } from '@/native/barcodeScan';
 import { useAuthStore } from '@/stores/authStore';
@@ -77,6 +78,7 @@ export function ProductsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
   const [scanning, setScanning] = useState(false);
   const [scanTarget, setScanTarget] = useState<'create' | 'edit'>('create');
+  const [imageUploading, setImageUploading] = useState(false);
   const qc = useQueryClient();
   const hasPermission = useAuthStore((s) => s.hasPermission);
   const roles = useAuthStore((s) => s.user?.roles || []);
@@ -221,6 +223,7 @@ export function ProductsPage() {
                       barcode: updated.barcode ?? p.barcode,
                       type: updated.type ?? p.type,
                       isActive: updated.isActive ?? p.isActive,
+                      imageUrl: updated.imageUrl !== undefined ? updated.imageUrl : p.imageUrl,
                     }
                   : p
               ),
@@ -271,17 +274,50 @@ export function ProductsPage() {
 
   const uploadProductImage = async (file: File, target: 'create' | 'edit') => {
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const res = await api.post('/uploads', fd);
-      const url = res.data?.data?.url as string | undefined;
-      if (!url) throw new Error('Upload failed');
+      if (!file.type.startsWith('image/')) {
+        toast.error('Please choose an image file (JPG, PNG, WebP…)');
+        return;
+      }
+      setImageUploading(true);
+      // Compress first so the same photo fits on phone, desktop, and website
+      // and is stored as a durable data URL in the database (not ephemeral disk).
+      const dataUrl = await compressImageToDataUrl(file, {
+        maxEdge: 900,
+        quality: 0.82,
+        maxBytes: 450 * 1024,
+      });
+
+      let url = dataUrl;
+      try {
+        // Prefer API path (same data-URL format) when online
+        const blob = await (await fetch(dataUrl)).blob();
+        const fd = new FormData();
+        fd.append('file', blob, (file.name || 'product').replace(/\.\w+$/, '') + '.jpg');
+        const res = await api.post('/uploads', fd);
+        const remote = res.data?.data?.url as string | undefined;
+        if (remote) url = remote;
+      } catch {
+        // Offline / upload endpoint issue — still keep compressed data URL for product save
+      }
+
       if (target === 'create') setForm((f) => ({ ...f, imageUrl: url }));
       else setEditForm((f) => ({ ...f, imageUrl: url }));
-      toast.success('Photo uploaded');
+      toast.success(
+        target === 'edit'
+          ? 'Photo updated — tap Save to sync on all devices'
+          : 'Photo ready — save product to sync on all devices'
+      );
     } catch (e) {
       toast.error(getErrorMessage(e) || 'Photo upload failed');
+    } finally {
+      setImageUploading(false);
     }
+  };
+
+  const clearProductImage = (target: 'create' | 'edit') => {
+    if (target === 'create') setForm((f) => ({ ...f, imageUrl: '' }));
+    else setEditForm((f) => ({ ...f, imageUrl: '' }));
+    toast.message('Photo removed — save product to apply');
   };
 
   const openCreate = () => {
@@ -469,23 +505,46 @@ export function ProductsPage() {
                 </div>
                 <div className="product-field">
                   <label>Photo</label>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {form.imageUrl ? (
                       <img
                         src={getMediaUrl(form.imageUrl) || ''}
-                        alt=""
-                        className="h-12 w-12 rounded-lg object-cover border border-border"
+                        alt="Product"
+                        className="h-14 w-14 rounded-lg object-cover border border-border shrink-0"
                       />
-                    ) : null}
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      className="text-xs"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) void uploadProductImage(f, 'create');
-                      }}
-                    />
+                    ) : (
+                      <div className="h-14 w-14 rounded-lg border border-dashed border-border bg-muted/40 flex items-center justify-center shrink-0">
+                        <Package className="h-5 w-5 text-muted-foreground opacity-50" />
+                      </div>
+                    )}
+                    <div className="flex flex-col gap-1.5 min-w-0 flex-1">
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="text-xs"
+                        disabled={imageUploading}
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) void uploadProductImage(f, 'create');
+                          e.target.value = '';
+                        }}
+                      />
+                      {form.imageUrl ? (
+                        <button
+                          type="button"
+                          className="text-xs text-destructive hover:underline text-left"
+                          disabled={imageUploading}
+                          onClick={() => clearProductImage('create')}
+                        >
+                          Remove photo
+                        </button>
+                      ) : (
+                        <p className="text-[11px] text-muted-foreground">
+                          {imageUploading ? 'Preparing photo…' : 'Optional — shows on all devices'}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -495,7 +554,7 @@ export function ProductsPage() {
                   type="submit"
                   className="flex-1 h-11"
                   loading={createMutation.isPending}
-                  disabled={!form.name.trim() || createMutation.isPending}
+                  disabled={!form.name.trim() || createMutation.isPending || imageUploading}
                 >
                   Save product
                 </Button>
@@ -659,6 +718,64 @@ export function ProductsPage() {
                     </button>
                   </div>
                 </div>
+
+                <div className="product-field">
+                  <label>Photo</label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {editForm.imageUrl ? (
+                      <img
+                        src={getMediaUrl(editForm.imageUrl) || ''}
+                        alt={editForm.name || 'Product'}
+                        className="h-16 w-16 rounded-lg object-cover border border-border shrink-0"
+                      />
+                    ) : (
+                      <div className="h-16 w-16 rounded-lg border border-dashed border-border bg-muted/40 flex items-center justify-center shrink-0">
+                        <Package className="h-6 w-6 text-muted-foreground opacity-50" />
+                      </div>
+                    )}
+                    <div className="flex flex-col gap-1.5 min-w-0 flex-1">
+                      {canUpdate ? (
+                        <>
+                          <Input
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            className="text-xs"
+                            disabled={imageUploading}
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) void uploadProductImage(f, 'edit');
+                              e.target.value = '';
+                            }}
+                          />
+                          <div className="flex flex-wrap items-center gap-3">
+                            {editForm.imageUrl ? (
+                              <button
+                                type="button"
+                                className="text-xs text-destructive hover:underline"
+                                disabled={imageUploading}
+                                onClick={() => clearProductImage('edit')}
+                              >
+                                Remove photo
+                              </button>
+                            ) : null}
+                            <p className="text-[11px] text-muted-foreground">
+                              {imageUploading
+                                ? 'Preparing photo…'
+                                : editForm.imageUrl
+                                  ? 'Change photo, then tap Save'
+                                  : 'Add a photo, then tap Save'}
+                            </p>
+                          </div>
+                        </>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          {editForm.imageUrl ? 'Current product photo' : 'No photo'}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <footer className="product-editor-footer">
@@ -686,7 +803,7 @@ export function ProductsPage() {
                     type="submit"
                     className="flex-1 h-11 min-w-0"
                     loading={updateMutation.isPending}
-                    disabled={!editForm.name.trim() || updateMutation.isPending}
+                    disabled={!editForm.name.trim() || updateMutation.isPending || imageUploading}
                   >
                     <Pencil className="h-4 w-4" /> Save
                   </Button>

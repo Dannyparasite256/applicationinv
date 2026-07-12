@@ -65,6 +65,12 @@ frontend/android/capacitor-cordova-android-plugins/build/
 *.aab
 *.keystore
 
+# Windows Electron desktop package output
+desktop/release/
+desktop/node_modules/
+*.exe
+!desktop/**/*.cjs
+
 # OS
 Thumbs.db
 Desktop.ini
