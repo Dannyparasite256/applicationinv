@@ -143,12 +143,20 @@ export function DashboardPage() {
                 </p>
               </div>
             </div>
-            <Link
-              to="/app/platform"
-              className="inline-flex h-9 items-center justify-center rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground shadow-sm hover:bg-primary/90 shrink-0"
-            >
-              All businesses
-            </Link>
+            <div className="flex flex-wrap gap-2 shrink-0">
+              <Link
+                to="/app/platform/businesses"
+                className="inline-flex h-9 items-center justify-center rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground shadow-sm hover:bg-primary/90"
+              >
+                Business directory
+              </Link>
+              <Link
+                to="/app/platform"
+                className="inline-flex h-9 items-center justify-center rounded-lg border border-border bg-background px-3 text-xs font-medium hover:bg-muted"
+              >
+                Overview
+              </Link>
+            </div>
           </CardContent>
         </Card>
       )}

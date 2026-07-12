@@ -49,8 +49,15 @@ const queryClient = new QueryClient({
         return failureCount < 2;
       },
       retryDelay: (attempt) => Math.min(2000 * 2 ** attempt, 15_000),
-      refetchOnWindowFocus: false,
-      staleTime: 30_000,
+      // Keep open screens fresh after edits / focus without a full app reload
+      refetchOnWindowFocus: true,
+      refetchOnMount: true,
+      refetchOnReconnect: true,
+      staleTime: 10_000,
+    },
+    mutations: {
+      // Failures surface via toast in each page; no global retry spam
+      retry: 0,
     },
   },
 });

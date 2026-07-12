@@ -814,6 +814,20 @@
   }
 }
 
+/* Global search — gradient line on results panel */
+@keyframes search-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+.global-search-shell:focus-within {
+  z-index: 50;
+}
+
 .skeleton {
   background: linear-gradient(
     90deg,

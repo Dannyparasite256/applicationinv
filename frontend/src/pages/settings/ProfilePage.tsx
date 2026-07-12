@@ -5,7 +5,9 @@ import { toast } from 'sonner';
 import { ArrowLeft, Building2, Camera, ImagePlus } from 'lucide-react';
 import { api, getErrorMessage } from '@/lib/api';
 import { getMediaUrl, brandInitials } from '@/lib/media';
+import { refreshAppData } from '@/lib/refreshApp';
 import { useAuthStore } from '@/stores/authStore';
+import { useCurrencyStore } from '@/stores/currencyStore';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
@@ -53,10 +55,8 @@ export function ProfilePage() {
 
   const saveCompany = useMutation({
     mutationFn: async () => api.put('/company', profile),
-    onSuccess: (res) => {
-      toast.success('Company profile saved');
-      qc.invalidateQueries({ queryKey: ['company'] });
-      qc.invalidateQueries({ queryKey: ['currencies'] });
+    onSuccess: async (res) => {
+      toast.success('Company profile saved — app updated');
       const c = res.data?.data;
       if (authUser && c) {
         setUser({
@@ -70,6 +70,41 @@ export function ProfilePage() {
           },
         });
       }
+      // Base currency change: rebase store immediately so amounts reformat everywhere
+      const prevBase = (useCurrencyStore.getState().baseCurrency || data?.currency || 'USD').toUpperCase();
+      const nextBase = c?.currency ? String(c.currency).toUpperCase() : prevBase;
+      if (nextBase && nextBase !== prevBase) {
+        try {
+          const baseRes = await api.put('/currencies/base', { code: nextBase });
+          const d = baseRes.data?.data as
+            | {
+                baseCurrency?: string;
+                currencies?: Array<{
+                  code: string;
+                  name: string;
+                  symbol: string;
+                  exchangeRate: number;
+                  isBase?: boolean;
+                  isActive?: boolean;
+                }>;
+                liveSource?: string;
+              }
+            | undefined;
+          if (d?.baseCurrency && d?.currencies) {
+            useCurrencyStore.getState().setFromApi({
+              baseCurrency: d.baseCurrency,
+              currencies: d.currencies,
+              liveSource: d.liveSource,
+            });
+            useCurrencyStore.getState().setBaseCurrency(d.baseCurrency);
+          } else {
+            useCurrencyStore.getState().setBaseCurrency(nextBase);
+          }
+        } catch {
+          useCurrencyStore.getState().setBaseCurrency(nextBase);
+        }
+      }
+      await refreshAppData(qc);
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });
@@ -82,11 +117,10 @@ export function ProfilePage() {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
     },
-    onSuccess: (res) => {
+    onSuccess: async (res) => {
       const c = res.data?.data;
       toast.success('Business logo updated');
       setLogoPreview(getMediaUrl(c?.logoUrl));
-      qc.invalidateQueries({ queryKey: ['company'] });
       if (authUser && c) {
         setUser({
           ...authUser,
@@ -99,6 +133,7 @@ export function ProfilePage() {
           },
         });
       }
+      await qc.invalidateQueries({ queryKey: ['company'], refetchType: 'active' });
     },
     onError: (e) => toast.error(getErrorMessage(e) || 'Logo upload failed'),
   });

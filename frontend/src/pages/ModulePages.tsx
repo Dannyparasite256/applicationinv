@@ -149,7 +149,7 @@ function invalidateAfterSaleChange(qc: ReturnType<typeof useQueryClient>) {
     'invoices',
   ] as const;
   for (const key of keys) {
-    void qc.invalidateQueries({ queryKey: [key] });
+    void qc.invalidateQueries({ queryKey: [key], refetchType: 'active' });
   }
   // Force dashboard/sales to re-fetch now (not only when the page remounts)
   void qc.refetchQueries({ queryKey: ['dashboard'], type: 'all' });

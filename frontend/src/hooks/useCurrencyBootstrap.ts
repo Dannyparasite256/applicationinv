@@ -88,7 +88,9 @@ export function useCurrencyBootstrap() {
       currencies: data.currencies,
       liveSource: data.liveSource,
     });
-    await qc.invalidateQueries({ queryKey: ['currencies'] });
+    await qc.invalidateQueries({ queryKey: ['currencies'], refetchType: 'active' });
+    const { refreshMoneyViews } = await import('@/lib/refreshApp');
+    await refreshMoneyViews(qc);
     toast.success(`Rates updated${data.liveSource ? ` · ${data.liveSource}` : ''}`);
     return data;
   }, [qc, setFromApi]);
@@ -112,8 +114,10 @@ export function useCurrencyBootstrap() {
           company: { ...user.company, currency: data.baseCurrency },
         });
       }
-      await qc.invalidateQueries({ queryKey: ['currencies'] });
-      await qc.invalidateQueries({ queryKey: ['company'] });
+      await qc.invalidateQueries({ queryKey: ['currencies'], refetchType: 'active' });
+      await qc.invalidateQueries({ queryKey: ['company'], refetchType: 'active' });
+      const { refreshMoneyViews } = await import('@/lib/refreshApp');
+      await refreshMoneyViews(qc);
       toast.success(`Base currency is now ${data.baseCurrency} — rates rebased`);
       return data;
     },

@@ -1,6 +1,6 @@
-import { Bell, Menu, Moon, Search, Sun, LogOut, User, Wifi, WifiOff, RefreshCw, Coins } from 'lucide-react';
+import { Bell, Menu, Moon, Sun, LogOut, User, Wifi, WifiOff, RefreshCw, Coins } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/stores/authStore';
@@ -12,10 +12,11 @@ import { getMediaUrl, brandInitials } from '@/lib/media';
 import { logout as logoutApi } from '@/services/auth.service';
 import { api } from '@/lib/api';
 import { runSyncEngine } from '@/lib/offline/syncEngine';
+import { refreshMoneyViews } from '@/lib/refreshApp';
 import { requestNotificationPermission, notifyLocal } from '@/native/notifications';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
+import { GlobalSearch } from '@/components/layout/GlobalSearch';
 import { useEffect, useRef, useState } from 'react';
 
 interface TopbarProps {
@@ -34,6 +35,7 @@ export function Topbar({ onMenuClick }: TopbarProps) {
   const baseCurrency = useCurrencyStore((s) => s.baseCurrency);
   const currencies = useCurrencyStore((s) => s.currencies);
   const setDisplayCurrency = useCurrencyStore((s) => s.setDisplayCurrency);
+  const qc = useQueryClient();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -88,7 +90,7 @@ export function Topbar({ onMenuClick }: TopbarProps) {
         </Button>
 
         {/* Mobile brand — shrinks on narrow screens so actions stay visible */}
-        <div className="flex items-center gap-1.5 lg:hidden min-w-0 flex-1 overflow-hidden max-w-[42vw] xs:max-w-none">
+        <div className="flex items-center gap-1.5 lg:hidden min-w-0 overflow-hidden max-w-[38vw] xs:max-w-[42vw] shrink">
           <div className="brand-mark h-8 w-8 sm:h-8 sm:w-8 text-[10px] shrink-0">
             {companyLogo ? (
               <img src={companyLogo} alt="" className="h-full w-full object-cover" />
@@ -103,16 +105,10 @@ export function Topbar({ onMenuClick }: TopbarProps) {
           </div>
         </div>
 
-        <div className="relative hidden md:block flex-1 max-w-md min-w-0">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search…"
-            className="pl-9 h-9 rounded-xl bg-muted/50 border-transparent focus:border-border shadow-none"
-          />
-        </div>
-
-        <div className="ml-auto flex items-center gap-0.5 sm:gap-1 shrink-0">
-          <div className="relative flex items-center gap-0.5 rounded-lg border border-border bg-muted/40 px-1.5 sm:px-2 h-9 sm:h-8 min-h-[2.25rem]">
+        {/* Search + actions cluster (search expands on desktop, icon on mobile) */}
+        <div className="ml-auto flex flex-1 items-center justify-end gap-0.5 sm:gap-1 min-w-0">
+          <GlobalSearch />
+          <div className="relative flex items-center gap-0.5 rounded-lg border border-border bg-muted/40 px-1.5 sm:px-2 h-9 sm:h-8 min-h-[2.25rem] shrink-0">
             <Coins className="h-3.5 w-3.5 text-primary shrink-0" />
             <select
               className="bg-transparent text-[11px] sm:text-xs font-semibold outline-none max-w-[3.5rem] sm:max-w-[5rem] cursor-pointer py-1"
@@ -120,9 +116,12 @@ export function Topbar({ onMenuClick }: TopbarProps) {
               aria-label="Display currency"
               title={`Display currency (base: ${baseCurrency}). Changing this converts all amounts app-wide.`}
               onChange={(e) => {
-                setDisplayCurrency(e.target.value, { lock: true });
-                toast.message(`Currency: ${e.target.value}`, {
-                  description: `All prices and totals now show in ${e.target.value} (base ${baseCurrency})`,
+                const code = e.target.value;
+                setDisplayCurrency(code, { lock: true });
+                // Remount active pages (AppLayout uiRevision) + refetch money views
+                void refreshMoneyViews(qc);
+                toast.success(`Showing amounts in ${code}`, {
+                  description: `Converted from base ${baseCurrency} · updates everywhere instantly`,
                 });
               }}
             >

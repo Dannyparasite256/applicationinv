@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ArrowLeft, Coins, RefreshCw } from 'lucide-react';
 import { api, getErrorMessage } from '@/lib/api';
 import { useCurrencyStore } from '@/stores/currencyStore';
+import { refreshMoneyViews } from '@/lib/refreshApp';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
 
@@ -34,11 +35,23 @@ export function CurrencyPage() {
   const { data: currencyData, refetch, isFetching } = useQuery({
     queryKey: ['currencies'],
     queryFn: async () => (await api.get('/currencies')).data.data as CurrencyApi,
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
+
+  // Keep global currency store in sync the moment this page gets fresh data
+  useEffect(() => {
+    if (!currencyData?.baseCurrency || !currencyData?.currencies) return;
+    useCurrencyStore.getState().setFromApi({
+      baseCurrency: currencyData.baseCurrency,
+      currencies: currencyData.currencies,
+      liveSource: currencyData.liveSource,
+    });
+  }, [currencyData]);
 
   const refreshFx = useMutation({
     mutationFn: async () => (await api.post('/currencies/refresh')).data.data as CurrencyApi,
-    onSuccess: (d) => {
+    onSuccess: async (d) => {
       toast.success(`Live rates updated${d?.liveSource ? ` · ${d.liveSource}` : ''}`);
       if (d?.baseCurrency && d?.currencies) {
         useCurrencyStore.getState().setFromApi({
@@ -47,18 +60,28 @@ export function CurrencyPage() {
           liveSource: d.liveSource,
         });
       }
-      void qc.invalidateQueries({ queryKey: ['currencies'] });
-      void refetch();
+      await qc.invalidateQueries({ queryKey: ['currencies'] });
+      await refetch();
+      await refreshMoneyViews(qc);
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });
 
   const addCurrency = useMutation({
     mutationFn: async () => api.post('/currencies', { code: addCurrencyCode }),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success(`${addCurrencyCode} enabled with live rate`);
-      void qc.invalidateQueries({ queryKey: ['currencies'] });
-      void refetch();
+      const res = await refetch();
+      const d = res.data;
+      if (d?.baseCurrency && d?.currencies) {
+        useCurrencyStore.getState().setFromApi({
+          baseCurrency: d.baseCurrency,
+          currencies: d.currencies,
+          liveSource: d.liveSource,
+        });
+      }
+      await qc.invalidateQueries({ queryKey: ['currencies'] });
+      await refreshMoneyViews(qc);
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });

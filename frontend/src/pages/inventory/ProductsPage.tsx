@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, Package, Camera, ScanBarcode, Pencil, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -58,7 +59,8 @@ const PRODUCT_TYPES = [
 const inputClass = 'h-10 w-full rounded-lg border border-input bg-background px-2.5 text-base';
 
 export function ProductsPage() {
-  const [search, setSearch] = useState('');
+  const [searchParams] = useSearchParams();
+  const [search, setSearch] = useState(() => searchParams.get('q') || '');
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editing, setEditing] = useState<Product | null>(null);
@@ -71,6 +73,12 @@ export function ProductsPage() {
   const roles = useAuthStore((s) => s.user?.roles || []);
   const manager = isManager(roles);
   const moneyCode = useCurrencyStore((s) => s.displayCurrency || s.baseCurrency || 'USD');
+
+  // Global search / deep link: /app/products?q=name
+  useEffect(() => {
+    const q = searchParams.get('q');
+    if (q != null) setSearch(q);
+  }, [searchParams]);
 
   // Owners/managers always can manage products; staff need explicit permission
   const canCreate = hasPermission('inventory.products.create') || manager;
@@ -120,10 +128,12 @@ export function ProductsPage() {
 
   const invalidateProductQueries = async () => {
     await Promise.all([
-      qc.invalidateQueries({ queryKey: ['products'] }),
-      qc.invalidateQueries({ queryKey: ['products-mini'] }),
-      qc.invalidateQueries({ queryKey: ['pos-products'] }),
-      qc.invalidateQueries({ queryKey: ['inventory'] }),
+      qc.invalidateQueries({ queryKey: ['products'], refetchType: 'active' }),
+      qc.invalidateQueries({ queryKey: ['products-mini'], refetchType: 'active' }),
+      qc.invalidateQueries({ queryKey: ['pos-products'], refetchType: 'active' }),
+      qc.invalidateQueries({ queryKey: ['inventory'], refetchType: 'active' }),
+      qc.invalidateQueries({ queryKey: ['dashboard'], refetchType: 'active' }),
+      qc.invalidateQueries({ queryKey: ['stock-levels'], refetchType: 'active' }),
     ]);
   };
 

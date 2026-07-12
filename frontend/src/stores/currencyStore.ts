@@ -28,6 +28,11 @@ interface CurrencyState {
   currencies: AppCurrency[];
   lastSyncedAt: string | null;
   liveSource: string | null;
+  /**
+   * Bumps whenever display/base/rates change so the app shell can remount
+   * pages and every formatCurrency() call re-runs immediately.
+   */
+  uiRevision: number;
   setFromApi: (payload: {
     baseCurrency: string;
     currencies: AppCurrency[];
@@ -71,6 +76,7 @@ export const useCurrencyStore = create<CurrencyState>()(
       currencies: [{ code: 'USD', name: 'US Dollar', symbol: '$', exchangeRate: 1, isBase: true }],
       lastSyncedAt: null,
       liveSource: null,
+      uiRevision: 0,
 
       setFromApi: ({ baseCurrency, currencies, liveSource }) => {
         const base = (baseCurrency || 'USD').toUpperCase();
@@ -79,7 +85,8 @@ export const useCurrencyStore = create<CurrencyState>()(
           rates[c.code.toUpperCase()] = Number(c.exchangeRate) || 1;
         }
         rates[base] = 1;
-        const { displayCurrency, displayCurrencyLocked, locationCurrency } = get();
+        const prev = get();
+        const { displayCurrency, displayCurrencyLocked, locationCurrency, uiRevision } = prev;
         let nextDisplay = displayCurrency;
         if (displayCurrencyLocked) {
           const stillValid = currencies.some(
@@ -94,27 +101,66 @@ export const useCurrencyStore = create<CurrencyState>()(
             : false;
           nextDisplay = hasLoc ? loc : base;
         }
+
+        // Avoid remount thrash when bootstrap / page sync re-applies the same rates
+        const ratesUnchanged =
+          Object.keys(rates).length === Object.keys(prev.rates).length &&
+          Object.keys(rates).every((k) => prev.rates[k] === rates[k]);
+        const listUnchanged =
+          prev.currencies.length === currencies.length &&
+          currencies.every((c, i) => {
+            const p = prev.currencies[i];
+            return (
+              p &&
+              p.code === c.code &&
+              Number(p.exchangeRate) === Number(c.exchangeRate) &&
+              p.isBase === c.isBase &&
+              p.isActive === c.isActive
+            );
+          });
+        const noVisualChange =
+          prev.baseCurrency === base &&
+          prev.displayCurrency === nextDisplay &&
+          ratesUnchanged &&
+          listUnchanged;
+
         set({
           baseCurrency: base,
           rates,
           currencies,
           lastSyncedAt: new Date().toISOString(),
-          liveSource: liveSource ?? get().liveSource,
+          liveSource: liveSource ?? prev.liveSource,
           displayCurrency: nextDisplay,
+          uiRevision: noVisualChange ? uiRevision : uiRevision + 1,
         });
       },
 
       setDisplayCurrency: (code, opts) => {
         const c = code.toUpperCase();
+        const shouldLock = opts?.lock !== false;
+        const prev = get().displayCurrency;
+        if (prev === c) {
+          // Same code — only lock if needed, no remount
+          if (shouldLock && !get().displayCurrencyLocked) {
+            set({ displayCurrencyLocked: true });
+          }
+          return;
+        }
         set({
           displayCurrency: c,
-          displayCurrencyLocked: opts?.lock === false ? get().displayCurrencyLocked : true,
+          displayCurrencyLocked: shouldLock ? true : get().displayCurrencyLocked,
+          uiRevision: get().uiRevision + 1,
         });
       },
 
       setBaseCurrency: (code) => {
         const c = code.toUpperCase();
-        set({ baseCurrency: c, displayCurrency: c, displayCurrencyLocked: true });
+        set({
+          baseCurrency: c,
+          displayCurrency: c,
+          displayCurrencyLocked: true,
+          uiRevision: get().uiRevision + 1,
+        });
       },
 
       setLocationCurrency: (code) => {
@@ -124,17 +170,27 @@ export const useCurrencyStore = create<CurrencyState>()(
       applyLocationDefault: (code, opts) => {
         const c = code.toUpperCase();
         if (!/^[A-Z]{3}$/.test(c)) return;
-        const { displayCurrencyLocked } = get();
+        const { displayCurrencyLocked, displayCurrency, uiRevision } = get();
         if (displayCurrencyLocked) {
           // User already chose — only remember location, don't override
           set({ locationCurrency: c });
+          return;
+        }
+        const nextLock = opts?.lock === true;
+        // Avoid remount thrash when device/IP settle on same code
+        if (displayCurrency === c) {
+          set({
+            locationCurrency: c,
+            displayCurrencyLocked: nextLock,
+          });
           return;
         }
         set({
           locationCurrency: c,
           displayCurrency: c,
           // Lock after IP refine so we don't thrash; device-only guess stays unlocked
-          displayCurrencyLocked: opts?.lock === true,
+          displayCurrencyLocked: nextLock,
+          uiRevision: uiRevision + 1,
         });
       },
 

@@ -6,6 +6,7 @@ import { Topbar } from './Topbar';
 import { OfflineBanner } from '@/components/shared/OfflineBanner';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
+import { useCurrencyStore } from '@/stores/currencyStore';
 import { applyAppFont } from '@/lib/fonts';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { useCurrencyBootstrap } from '@/hooks/useCurrencyBootstrap';
@@ -14,6 +15,11 @@ export function AppLayout() {
   const accessToken = useAuthStore((s) => s.accessToken);
   const theme = useThemeStore((s) => s.theme);
   const fontId = useThemeStore((s) => s.fontId);
+  // Subscribe so the whole app shell re-renders when currency / rates change.
+  // formatCurrency() reads the store at render time — without this, open pages stay stale.
+  const currencyUiKey = useCurrencyStore(
+    (s) => `${s.uiRevision}:${s.displayCurrency}:${s.baseCurrency}`
+  );
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
@@ -37,6 +43,8 @@ export function AppLayout() {
   }
 
   const isPos = location.pathname.startsWith('/app/pos');
+  // Remount page content when route OR display currency changes so every amount re-formats
+  const pageKey = `${location.pathname}::${currencyUiKey}`;
 
   return (
     <div className="app-shell flex h-[100dvh] max-h-[100dvh] w-full max-w-[100vw] min-h-0 overflow-hidden bg-background bg-grid-fade">
@@ -72,7 +80,7 @@ export function AppLayout() {
         >
           <AnimatePresence mode="wait">
             <motion.div
-              key={location.pathname}
+              key={pageKey}
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}

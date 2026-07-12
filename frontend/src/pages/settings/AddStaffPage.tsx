@@ -51,9 +51,9 @@ export function AddStaffPage() {
         lastName: '',
         roleCode: 'CASHIER',
       });
-      void qc.invalidateQueries({ queryKey: ['users'] });
-      void qc.invalidateQueries({ queryKey: ['staff-pending'] });
-      void qc.invalidateQueries({ queryKey: ['staff-pending-count'] });
+      void qc.invalidateQueries({ queryKey: ['users'], refetchType: 'active' });
+      void qc.invalidateQueries({ queryKey: ['staff-pending'], refetchType: 'active' });
+      void qc.invalidateQueries({ queryKey: ['staff-pending-count'], refetchType: 'active' });
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });
@@ -62,10 +62,10 @@ export function AddStaffPage() {
     mutationFn: async (id: string) => api.post(`/users/${id}/approve`),
     onSuccess: () => {
       toast.success('Staff confirmed — they can login now');
-      void qc.invalidateQueries({ queryKey: ['users'] });
-      void qc.invalidateQueries({ queryKey: ['staff-pending'] });
-      void qc.invalidateQueries({ queryKey: ['staff-pending-count'] });
-      void qc.invalidateQueries({ queryKey: ['notifications'] });
+      void qc.invalidateQueries({ queryKey: ['users'], refetchType: 'active' });
+      void qc.invalidateQueries({ queryKey: ['staff-pending'], refetchType: 'active' });
+      void qc.invalidateQueries({ queryKey: ['staff-pending-count'], refetchType: 'active' });
+      void qc.invalidateQueries({ queryKey: ['notifications'], refetchType: 'active' });
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });
