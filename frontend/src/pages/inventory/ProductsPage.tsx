@@ -190,8 +190,14 @@ export function ProductsPage() {
     setShowForm(true);
   };
 
-  const fieldSelectClass =
-    'h-11 w-full rounded-lg border border-input bg-background px-3 text-base sm:text-sm';
+  const productTypes = [
+    { value: 'PRODUCT', label: 'Product' },
+    { value: 'SERVICE', label: 'Service' },
+    { value: 'DRUG', label: 'Drug' },
+  ] as const;
+
+  const inputClass =
+    'h-12 w-full rounded-xl border border-input bg-background px-3 text-base shadow-sm';
 
   return (
     <div className="page-container fit-x pb-6">
@@ -389,7 +395,7 @@ export function ProductsPage() {
         </CardContent>
       </Card>
 
-      {/* —— Full-screen Add product (phone-friendly) —— */}
+      {/* —— Full-screen Add product —— */}
       {showForm && canCreate && (
         <div
           className="modal-overlay"
@@ -398,83 +404,100 @@ export function ProductsPage() {
           aria-label="Add product"
           onClick={() => setShowForm(false)}
         >
-          <div className="modal-sheet relative z-10" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-sheet-header px-4 pb-3">
-              <div className="flex items-center justify-between gap-2">
+          <div className="product-editor relative z-10 w-full" onClick={(e) => e.stopPropagation()}>
+            <header className="product-editor-header">
+              <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <h2 className="text-base font-semibold">Add product</h2>
-                  <p className="text-xs text-muted-foreground">Scroll if needed · Save stays at bottom</p>
+                  <h2 className="text-lg font-bold tracking-tight">Add product</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">All fields visible · scroll if needed</p>
                 </div>
-                <Button variant="ghost" size="icon" className="shrink-0" onClick={() => setShowForm(false)}>
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  className="h-10 w-10 shrink-0 rounded-full"
+                  onClick={() => setShowForm(false)}
+                  aria-label="Close"
+                >
                   <X className="h-5 w-5" />
                 </Button>
               </div>
-            </div>
+            </header>
 
-            <div className="modal-sheet-body space-y-4">
-              <div className="product-field">
-                <label htmlFor="create-name">Name *</label>
-                <Input
-                  id="create-name"
-                  className="h-11 text-base"
-                  placeholder="Product name"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  autoFocus
-                />
-              </div>
-              <div className="product-field">
-                <label htmlFor="create-sku">SKU (optional)</label>
-                <Input
-                  id="create-sku"
-                  className="h-11 text-base font-mono"
-                  placeholder="Leave blank to auto-generate"
-                  value={form.sku}
-                  onChange={(e) => setForm({ ...form, sku: e.target.value.toUpperCase() })}
-                  maxLength={100}
-                  autoComplete="off"
-                />
-              </div>
-              <div className="product-field">
-                <label htmlFor="create-barcode">Barcode</label>
-                <div className="flex gap-2">
+            <div className="product-editor-scroll space-y-3">
+              <section className="product-section">
+                <p className="product-section-title">Details</p>
+                <div className="product-field">
+                  <label htmlFor="create-name">Product name *</label>
                   <Input
-                    id="create-barcode"
-                    className="h-11 text-base font-mono flex-1"
-                    placeholder="Scan or type"
-                    value={form.barcode}
-                    onChange={(e) => setForm({ ...form, barcode: e.target.value })}
+                    id="create-name"
+                    className={inputClass}
+                    placeholder="e.g. Bottled water 500ml"
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    autoFocus
                   />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="h-11 shrink-0 px-3"
-                    loading={scanning && scanTarget === 'create'}
-                    onClick={() => void scanProductBarcode('create')}
-                  >
-                    {canUseCameraScan() ? <Camera className="h-5 w-5" /> : <ScanBarcode className="h-5 w-5" />}
-                  </Button>
                 </div>
-              </div>
-              <div className="product-field">
-                <label htmlFor="create-type">Type</label>
-                <select
-                  id="create-type"
-                  className={fieldSelectClass}
-                  value={form.type}
-                  onChange={(e) => setForm({ ...form, type: e.target.value })}
-                >
-                  <option value="PRODUCT">Product</option>
-                  <option value="SERVICE">Service</option>
-                  <option value="DRUG">Drug</option>
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
+                <div className="product-field">
+                  <label htmlFor="create-sku">
+                    SKU <span className="hint">(optional)</span>
+                  </label>
+                  <Input
+                    id="create-sku"
+                    className={`${inputClass} font-mono`}
+                    placeholder="Auto-generated if empty"
+                    value={form.sku}
+                    onChange={(e) => setForm({ ...form, sku: e.target.value.toUpperCase() })}
+                    maxLength={100}
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="product-field">
+                  <label htmlFor="create-barcode">Barcode</label>
+                  <div className="flex gap-2 min-w-0">
+                    <Input
+                      id="create-barcode"
+                      className={`${inputClass} font-mono flex-1 min-w-0`}
+                      placeholder="Scan or type"
+                      value={form.barcode}
+                      onChange={(e) => setForm({ ...form, barcode: e.target.value })}
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="h-12 w-12 shrink-0 rounded-xl px-0"
+                      loading={scanning && scanTarget === 'create'}
+                      onClick={() => void scanProductBarcode('create')}
+                      aria-label="Scan barcode"
+                    >
+                      {canUseCameraScan() ? <Camera className="h-5 w-5" /> : <ScanBarcode className="h-5 w-5" />}
+                    </Button>
+                  </div>
+                </div>
+                <div className="product-field">
+                  <label>Type</label>
+                  <div className="product-chip-row" role="group" aria-label="Product type">
+                    {productTypes.map((t) => (
+                      <button
+                        key={t.value}
+                        type="button"
+                        className="product-chip"
+                        data-active={form.type === t.value}
+                        onClick={() => setForm({ ...form, type: t.value })}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </section>
+
+              <section className="product-section">
+                <p className="product-section-title">Pricing & stock</p>
                 <div className="product-field">
                   <label htmlFor="create-cost">Cost price</label>
                   <Input
                     id="create-cost"
-                    className="h-11 text-base"
+                    className={inputClass}
                     placeholder="0.00"
                     type="number"
                     min={0}
@@ -488,7 +511,7 @@ export function ProductsPage() {
                   <label htmlFor="create-price">Selling price</label>
                   <Input
                     id="create-price"
-                    className="h-11 text-base font-semibold"
+                    className={`${inputClass} font-semibold`}
                     placeholder="0.00"
                     type="number"
                     min={0}
@@ -498,27 +521,26 @@ export function ProductsPage() {
                     onChange={(e) => setForm({ ...form, sellingPrice: e.target.value })}
                   />
                 </div>
-              </div>
-              <div className="product-field">
-                <label htmlFor="create-stock">Initial stock</label>
-                <Input
-                  id="create-stock"
-                  className="h-11 text-base"
-                  placeholder="0"
-                  type="number"
-                  min={0}
-                  step="1"
-                  inputMode="numeric"
-                  value={form.initialStock}
-                  onChange={(e) => setForm({ ...form, initialStock: e.target.value })}
-                />
-              </div>
-              <div className="h-4" aria-hidden />
+                <div className="product-field">
+                  <label htmlFor="create-stock">Initial stock</label>
+                  <Input
+                    id="create-stock"
+                    className={inputClass}
+                    placeholder="0"
+                    type="number"
+                    min={0}
+                    step="1"
+                    inputMode="numeric"
+                    value={form.initialStock}
+                    onChange={(e) => setForm({ ...form, initialStock: e.target.value })}
+                  />
+                </div>
+              </section>
             </div>
 
-            <div className="modal-sheet-footer flex gap-2">
+            <footer className="product-editor-footer flex gap-2">
               <Button
-                className="flex-1 h-11"
+                className="flex-1 h-12 rounded-xl text-base"
                 size="lg"
                 loading={createMutation.isPending}
                 onClick={() => createMutation.mutate()}
@@ -526,15 +548,19 @@ export function ProductsPage() {
               >
                 Save product
               </Button>
-              <Button className="h-11" variant="ghost" onClick={() => setShowForm(false)}>
+              <Button
+                className="h-12 rounded-xl px-5"
+                variant="outline"
+                onClick={() => setShowForm(false)}
+              >
                 Cancel
               </Button>
-            </div>
+            </footer>
           </div>
         </div>
       )}
 
-      {/* —— Full-screen Edit product —— */}
+      {/* —— Full-screen Edit product (polished, fully visible) —— */}
       {editing && (
         <div
           className="modal-overlay"
@@ -543,89 +569,107 @@ export function ProductsPage() {
           aria-label="Edit product"
           onClick={() => setEditing(null)}
         >
-          <div className="modal-sheet relative z-10" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-sheet-header px-4 pb-3">
-              <div className="flex items-center justify-between gap-2">
+          <div className="product-editor relative z-10 w-full" onClick={(e) => e.stopPropagation()}>
+            <header className="product-editor-header">
+              <div className="flex items-center justify-between gap-3 mb-3">
                 <div className="min-w-0">
-                  <h2 className="text-base font-semibold">Edit product</h2>
-                  <p className="text-xs font-mono text-muted-foreground truncate">SKU {editing.sku}</p>
+                  <h2 className="text-lg font-bold tracking-tight">Edit product</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">Change prices, name, status anytime</p>
                 </div>
-                <Button variant="ghost" size="icon" className="shrink-0" onClick={() => setEditing(null)}>
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  className="h-10 w-10 shrink-0 rounded-full"
+                  onClick={() => setEditing(null)}
+                  aria-label="Close"
+                >
                   <X className="h-5 w-5" />
                 </Button>
               </div>
-            </div>
-
-            <div className="modal-sheet-body space-y-4">
-              <div className="product-field">
-                <label htmlFor="edit-name">Name *</label>
-                <Input
-                  id="edit-name"
-                  className="h-11 text-base"
-                  value={editForm.name}
-                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                  disabled={!canUpdate}
-                  autoFocus
-                />
-              </div>
-              <div className="product-field">
-                <label htmlFor="edit-barcode">Barcode</label>
-                <div className="flex gap-2">
-                  <Input
-                    id="edit-barcode"
-                    className="h-11 text-base font-mono flex-1"
-                    value={editForm.barcode}
-                    onChange={(e) => setEditForm({ ...editForm, barcode: e.target.value })}
-                    disabled={!canUpdate}
-                  />
-                  {canUpdate && (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="h-11 shrink-0 px-3"
-                      loading={scanning && scanTarget === 'edit'}
-                      onClick={() => void scanProductBarcode('edit')}
-                    >
-                      <Camera className="h-5 w-5" />
-                    </Button>
-                  )}
+              <div className="product-summary">
+                <div className="product-summary-icon">
+                  <Package className="h-5 w-5" />
                 </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold leading-snug break-words">
+                    {editForm.name.trim() || editing.name}
+                  </p>
+                  <p className="text-[11px] font-mono text-muted-foreground mt-0.5 truncate">
+                    SKU {editing.sku}
+                    {editForm.barcode ? ` · ${editForm.barcode}` : ''}
+                  </p>
+                </div>
+                <Badge variant={editForm.isActive ? 'success' : 'secondary'} className="shrink-0">
+                  {editForm.isActive ? 'Active' : 'Off'}
+                </Badge>
               </div>
-              <div className="product-field">
-                <label htmlFor="edit-type">Type</label>
-                <select
-                  id="edit-type"
-                  className={fieldSelectClass}
-                  value={editForm.type}
-                  onChange={(e) => setEditForm({ ...editForm, type: e.target.value })}
-                  disabled={!canUpdate}
-                >
-                  <option value="PRODUCT">Product</option>
-                  <option value="SERVICE">Service</option>
-                  <option value="DRUG">Drug</option>
-                </select>
-              </div>
-              <div className="product-field">
-                <label htmlFor="edit-status">Status</label>
-                <select
-                  id="edit-status"
-                  className={fieldSelectClass}
-                  value={editForm.isActive ? 'active' : 'inactive'}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, isActive: e.target.value === 'active' })
-                  }
-                  disabled={!canUpdate}
-                >
-                  <option value="active">Active — show in POS</option>
-                  <option value="inactive">Inactive — hide from POS</option>
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
+            </header>
+
+            <div className="product-editor-scroll space-y-3">
+              <section className="product-section">
+                <p className="product-section-title">Details</p>
+                <div className="product-field">
+                  <label htmlFor="edit-name">Product name *</label>
+                  <Input
+                    id="edit-name"
+                    className={inputClass}
+                    value={editForm.name}
+                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                    disabled={!canUpdate}
+                    autoFocus
+                  />
+                </div>
+                <div className="product-field">
+                  <label htmlFor="edit-barcode">Barcode</label>
+                  <div className="flex gap-2 min-w-0">
+                    <Input
+                      id="edit-barcode"
+                      className={`${inputClass} font-mono flex-1 min-w-0`}
+                      placeholder="Optional"
+                      value={editForm.barcode}
+                      onChange={(e) => setEditForm({ ...editForm, barcode: e.target.value })}
+                      disabled={!canUpdate}
+                    />
+                    {canUpdate && (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="h-12 w-12 shrink-0 rounded-xl px-0"
+                        loading={scanning && scanTarget === 'edit'}
+                        onClick={() => void scanProductBarcode('edit')}
+                        aria-label="Scan barcode"
+                      >
+                        <Camera className="h-5 w-5" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <div className="product-field">
+                  <label>Type</label>
+                  <div className="product-chip-row" role="group" aria-label="Product type">
+                    {productTypes.map((t) => (
+                      <button
+                        key={t.value}
+                        type="button"
+                        className="product-chip"
+                        data-active={editForm.type === t.value}
+                        disabled={!canUpdate}
+                        onClick={() => setEditForm({ ...editForm, type: t.value })}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </section>
+
+              <section className="product-section">
+                <p className="product-section-title">Pricing</p>
                 <div className="product-field">
                   <label htmlFor="edit-cost">Cost price</label>
                   <Input
                     id="edit-cost"
-                    className="h-11 text-base"
+                    className={inputClass}
                     type="number"
                     min={0}
                     step="0.01"
@@ -634,12 +678,15 @@ export function ProductsPage() {
                     onChange={(e) => setEditForm({ ...editForm, costPrice: e.target.value })}
                     disabled={!canUpdate}
                   />
+                  <span className="hint">
+                    What you pay · {formatCurrency(parseFloat(editForm.costPrice) || 0)}
+                  </span>
                 </div>
                 <div className="product-field">
                   <label htmlFor="edit-price">Selling price *</label>
                   <Input
                     id="edit-price"
-                    className="h-11 text-base font-semibold"
+                    className={`${inputClass} font-semibold border-primary/40`}
                     type="number"
                     min={0}
                     step="0.01"
@@ -648,15 +695,49 @@ export function ProductsPage() {
                     onChange={(e) => setEditForm({ ...editForm, sellingPrice: e.target.value })}
                     disabled={!canUpdate}
                   />
+                  <span className="hint">
+                    Customer pays · {formatCurrency(parseFloat(editForm.sellingPrice) || 0)}
+                  </span>
                 </div>
-              </div>
-              <div className="h-4" aria-hidden />
+              </section>
+
+              <section className="product-section">
+                <p className="product-section-title">Availability</p>
+                <div className="product-field">
+                  <label>Status</label>
+                  <div className="product-chip-row" role="group" aria-label="Product status">
+                    <button
+                      type="button"
+                      className="product-chip"
+                      data-active={editForm.isActive}
+                      disabled={!canUpdate}
+                      onClick={() => setEditForm({ ...editForm, isActive: true })}
+                    >
+                      Active — for sale
+                    </button>
+                    <button
+                      type="button"
+                      className="product-chip"
+                      data-active={!editForm.isActive}
+                      disabled={!canUpdate}
+                      onClick={() => setEditForm({ ...editForm, isActive: false })}
+                    >
+                      Inactive — hidden
+                    </button>
+                  </div>
+                  <span className="hint">
+                    {editForm.isActive
+                      ? 'Shows in POS and can be sold'
+                      : 'Hidden from POS until you activate it again'}
+                  </span>
+                </div>
+              </section>
             </div>
 
-            <div className="modal-sheet-footer flex flex-col gap-2">
+            <footer className="product-editor-footer space-y-2">
               {canUpdate && (
                 <Button
-                  className="w-full h-11"
+                  className="w-full h-12 rounded-xl text-base font-semibold"
                   size="lg"
                   loading={updateMutation.isPending}
                   disabled={!editForm.name.trim()}
@@ -668,7 +749,7 @@ export function ProductsPage() {
               <div className="flex gap-2">
                 {canDelete && (
                   <Button
-                    className="flex-1 h-11"
+                    className="flex-1 h-11 rounded-xl"
                     variant="destructive"
                     loading={deleteMutation.isPending}
                     onClick={() => confirmDelete(editing)}
@@ -676,7 +757,11 @@ export function ProductsPage() {
                     <Trash2 className="h-4 w-4" /> Delete
                   </Button>
                 )}
-                <Button className="flex-1 h-11" variant="outline" onClick={() => setEditing(null)}>
+                <Button
+                  className="flex-1 h-11 rounded-xl"
+                  variant="outline"
+                  onClick={() => setEditing(null)}
+                >
                   Cancel
                 </Button>
               </div>
@@ -685,7 +770,7 @@ export function ProductsPage() {
                   Your account cannot edit products. Ask the company owner for permission.
                 </p>
               )}
-            </div>
+            </footer>
           </div>
         </div>
       )}
