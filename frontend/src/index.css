@@ -344,24 +344,100 @@
 
   /* Full-screen overlays that always fit the phone */
   .modal-overlay {
-    @apply fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4;
-    background: rgba(0, 0, 0, 0.45);
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    padding: 0;
+    background: rgba(0, 0, 0, 0.5);
+    /* Keep scroll inside the sheet, not the page behind */
+    overscroll-behavior: contain;
+  }
+
+  @media (min-width: 640px) {
+    .modal-overlay {
+      align-items: center;
+      padding: 1rem;
+    }
   }
 
   .modal-sheet {
     width: 100%;
     max-width: 32rem;
-    max-height: min(92dvh, 100%);
+    /* Phone: use almost the full screen so every field is reachable */
+    height: 100%;
+    max-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    overscroll-behavior: contain;
+    border-radius: 0;
+    @apply border border-border bg-card shadow-elevated;
+  }
+
+  @media (min-width: 640px) {
+    .modal-sheet {
+      height: auto;
+      max-height: min(90dvh, 40rem);
+      border-radius: 1rem;
+    }
+  }
+
+  /* Scroll only the body — fills remaining space between header and footer */
+  .modal-sheet-body {
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
-    @apply rounded-t-2xl sm:rounded-2xl border border-border bg-card shadow-elevated;
-    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+    touch-action: pan-y;
+    padding: 1rem;
+    padding-bottom: 1.25rem;
+  }
+
+  .modal-sheet-footer {
+    flex: 0 0 auto;
+    border-top: 1px solid hsl(var(--border));
+    padding: 0.75rem 1rem;
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+    background: hsl(var(--card));
+    /* Keep above keyboard-ish content on Android */
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.06);
+  }
+
+  .modal-sheet-header {
+    flex: 0 0 auto;
+    padding-top: max(0.75rem, env(safe-area-inset-top, 0px));
+    border-bottom: 1px solid hsl(var(--border) / 0.6);
+    background: hsl(var(--card));
   }
 
   .modal-sheet-lg {
     max-width: 42rem;
+  }
+
+  /* Tall touch-friendly form controls inside product editor */
+  .product-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 0;
+  }
+
+  .product-field label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: hsl(var(--muted-foreground));
+    letter-spacing: 0.01em;
+  }
+
+  .product-field input,
+  .product-field select {
+    min-height: 2.75rem;
+    font-size: 16px; /* prevents iOS zoom on focus */
   }
 
   /* Dropdowns / popovers never leave the viewport */

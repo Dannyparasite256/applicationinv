@@ -9,7 +9,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
+import { Card, CardContent } from '@/components/ui/Card';
 
 interface Product {
   id: string;
@@ -185,155 +185,123 @@ export function ProductsPage() {
     }
   };
 
+  const openCreate = () => {
+    setForm(emptyForm());
+    setShowForm(true);
+  };
+
+  const fieldSelectClass =
+    'h-11 w-full rounded-lg border border-input bg-background px-3 text-base sm:text-sm';
+
   return (
-    <div className="page-container fit-x">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Products</h1>
-          <p className="text-sm text-muted-foreground">
-            {data?.meta?.total ?? 0} items · edit prices anytime · delete when no longer needed
+    <div className="page-container fit-x pb-6">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold">Products</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground">
+            {data?.meta?.total ?? 0} items · tap a product to edit
           </p>
         </div>
         {canCreate && (
-          <Button
-            onClick={() => {
-              setShowForm((v) => !v);
-              setForm(emptyForm());
-            }}
-          >
-            <Plus className="h-4 w-4" /> Add Product
+          <Button className="shrink-0 h-10" onClick={openCreate}>
+            <Plus className="h-4 w-4" /> Add
           </Button>
         )}
       </div>
 
-      {showForm && canCreate && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">New product</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <div className="space-y-1 sm:col-span-2 lg:col-span-1">
-                <label className="text-xs font-medium text-muted-foreground">Name *</label>
-                <Input
-                  placeholder="Product name"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">SKU</label>
-                <Input
-                  placeholder="e.g. PRD-001 or leave blank"
-                  value={form.sku}
-                  onChange={(e) => setForm({ ...form, sku: e.target.value.toUpperCase() })}
-                  className="font-mono"
-                  maxLength={100}
-                  autoComplete="off"
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  Optional. Leave empty to auto-generate (PRD-000001…).
-                </p>
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Barcode</label>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Scan or type barcode / EAN"
-                    value={form.barcode}
-                    onChange={(e) => setForm({ ...form, barcode: e.target.value })}
-                    className="font-mono flex-1"
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="shrink-0 px-3"
-                    title="Scan with camera"
-                    loading={scanning && scanTarget === 'create'}
-                    onClick={() => void scanProductBarcode('create')}
-                  >
-                    {canUseCameraScan() ? (
-                      <Camera className="h-4 w-4" />
-                    ) : (
-                      <ScanBarcode className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Type</label>
-                <select
-                  className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
-                  value={form.type}
-                  onChange={(e) => setForm({ ...form, type: e.target.value })}
-                >
-                  <option value="PRODUCT">Product</option>
-                  <option value="SERVICE">Service</option>
-                  <option value="DRUG">Drug</option>
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Cost price</label>
-                <Input
-                  placeholder="0.00"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={form.costPrice}
-                  onChange={(e) => setForm({ ...form, costPrice: e.target.value })}
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Selling price</label>
-                <Input
-                  placeholder="0.00"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={form.sellingPrice}
-                  onChange={(e) => setForm({ ...form, sellingPrice: e.target.value })}
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Initial stock</label>
-                <Input
-                  placeholder="0"
-                  type="number"
-                  min={0}
-                  step="1"
-                  value={form.initialStock}
-                  onChange={(e) => setForm({ ...form, initialStock: e.target.value })}
-                />
-              </div>
-              <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-1">
-                <Button
-                  className="flex-1"
-                  loading={createMutation.isPending}
-                  onClick={() => createMutation.mutate()}
-                  disabled={!form.name.trim()}
-                >
-                  Save product
-                </Button>
-                <Button variant="ghost" onClick={() => setShowForm(false)}>
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <div className="relative w-full">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
         <Input
-          className="pl-9"
+          className="pl-9 h-11 text-base sm:text-sm"
           placeholder="Search name, SKU, barcode..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
       </div>
 
-      <Card>
+      {/* —— Mobile: stacked product cards (fits phone width) —— */}
+      <div className="space-y-2 sm:hidden">
+        {isLoading && (
+          <Card>
+            <CardContent className="py-8 text-center text-sm text-muted-foreground">
+              Loading products…
+            </CardContent>
+          </Card>
+        )}
+        {!isLoading && !data?.data?.length && (
+          <Card>
+            <CardContent className="py-12 text-center text-muted-foreground">
+              <Package className="mx-auto h-8 w-8 mb-2 opacity-40" />
+              <p className="text-sm">No products found</p>
+            </CardContent>
+          </Card>
+        )}
+        {data?.data?.map((p) => (
+          <Card key={p.id} className="overflow-hidden">
+            <CardContent className="p-3 space-y-2.5">
+              <button
+                type="button"
+                className="w-full text-left min-w-0"
+                onClick={() => (canUpdate || canDelete) && openEdit(p)}
+                disabled={!canUpdate && !canDelete}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-sm leading-snug break-words">{p.name}</p>
+                    <p className="text-[11px] font-mono text-muted-foreground mt-0.5">
+                      {p.sku}
+                      {p.barcode ? ` · ${p.barcode}` : ''}
+                    </p>
+                  </div>
+                  <Badge variant={p.isActive ? 'success' : 'secondary'} className="shrink-0">
+                    {p.isActive ? 'Active' : 'Off'}
+                  </Badge>
+                </div>
+                <div className="mt-2 grid grid-cols-3 gap-2 text-center rounded-lg bg-muted/50 px-2 py-2">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Cost</p>
+                    <p className="text-xs tabular-nums font-medium truncate">
+                      {formatCurrency(Number(p.costPrice))}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Price</p>
+                    <p className="text-xs tabular-nums font-bold truncate text-primary">
+                      {formatCurrency(Number(p.sellingPrice))}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Stock</p>
+                    <p className="text-xs tabular-nums font-medium">{p.stockQty ?? '—'}</p>
+                  </div>
+                </div>
+              </button>
+              {(canUpdate || canDelete) && (
+                <div className="flex gap-2 pt-0.5">
+                  {canUpdate && (
+                    <Button className="flex-1 h-10" variant="outline" onClick={() => openEdit(p)}>
+                      <Pencil className="h-4 w-4" /> Edit
+                    </Button>
+                  )}
+                  {canDelete && (
+                    <Button
+                      className="h-10 px-3"
+                      variant="destructive"
+                      loading={deleteMutation.isPending}
+                      onClick={() => confirmDelete(p)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* —— Desktop / tablet: table —— */}
+      <Card className="hidden sm:block">
         <CardContent className="p-0 table-scroll">
           <table className="w-full text-sm">
             <thead>
@@ -421,61 +389,213 @@ export function ProductsPage() {
         </CardContent>
       </Card>
 
-      {/* Edit product modal — prices, name, barcode, active */}
-      {editing && (
-        <div className="modal-overlay" onClick={() => setEditing(null)}>
-          <Card
-            className="modal-sheet relative z-10 m-0 sm:m-auto w-full max-w-lg"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <CardHeader className="pb-2">
-              <div className="flex items-start justify-between gap-2">
+      {/* —— Full-screen Add product (phone-friendly) —— */}
+      {showForm && canCreate && (
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Add product"
+          onClick={() => setShowForm(false)}
+        >
+          <div className="modal-sheet relative z-10" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-sheet-header px-4 pb-3">
+              <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <CardTitle className="text-base">Edit product</CardTitle>
-                  <CardDescription className="font-mono text-xs">
-                    SKU {editing.sku} · change cost/selling price anytime
-                  </CardDescription>
+                  <h2 className="text-base font-semibold">Add product</h2>
+                  <p className="text-xs text-muted-foreground">Scroll if needed · Save stays at bottom</p>
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => setEditing(null)}>
-                  <X className="h-4 w-4" />
+                <Button variant="ghost" size="icon" className="shrink-0" onClick={() => setShowForm(false)}>
+                  <X className="h-5 w-5" />
                 </Button>
               </div>
-            </CardHeader>
-            <CardContent className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1 sm:col-span-2">
-                <label className="text-xs font-medium text-muted-foreground">Name *</label>
+            </div>
+
+            <div className="modal-sheet-body space-y-4">
+              <div className="product-field">
+                <label htmlFor="create-name">Name *</label>
                 <Input
+                  id="create-name"
+                  className="h-11 text-base"
+                  placeholder="Product name"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  autoFocus
+                />
+              </div>
+              <div className="product-field">
+                <label htmlFor="create-sku">SKU (optional)</label>
+                <Input
+                  id="create-sku"
+                  className="h-11 text-base font-mono"
+                  placeholder="Leave blank to auto-generate"
+                  value={form.sku}
+                  onChange={(e) => setForm({ ...form, sku: e.target.value.toUpperCase() })}
+                  maxLength={100}
+                  autoComplete="off"
+                />
+              </div>
+              <div className="product-field">
+                <label htmlFor="create-barcode">Barcode</label>
+                <div className="flex gap-2">
+                  <Input
+                    id="create-barcode"
+                    className="h-11 text-base font-mono flex-1"
+                    placeholder="Scan or type"
+                    value={form.barcode}
+                    onChange={(e) => setForm({ ...form, barcode: e.target.value })}
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="h-11 shrink-0 px-3"
+                    loading={scanning && scanTarget === 'create'}
+                    onClick={() => void scanProductBarcode('create')}
+                  >
+                    {canUseCameraScan() ? <Camera className="h-5 w-5" /> : <ScanBarcode className="h-5 w-5" />}
+                  </Button>
+                </div>
+              </div>
+              <div className="product-field">
+                <label htmlFor="create-type">Type</label>
+                <select
+                  id="create-type"
+                  className={fieldSelectClass}
+                  value={form.type}
+                  onChange={(e) => setForm({ ...form, type: e.target.value })}
+                >
+                  <option value="PRODUCT">Product</option>
+                  <option value="SERVICE">Service</option>
+                  <option value="DRUG">Drug</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="product-field">
+                  <label htmlFor="create-cost">Cost price</label>
+                  <Input
+                    id="create-cost"
+                    className="h-11 text-base"
+                    placeholder="0.00"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    inputMode="decimal"
+                    value={form.costPrice}
+                    onChange={(e) => setForm({ ...form, costPrice: e.target.value })}
+                  />
+                </div>
+                <div className="product-field">
+                  <label htmlFor="create-price">Selling price</label>
+                  <Input
+                    id="create-price"
+                    className="h-11 text-base font-semibold"
+                    placeholder="0.00"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    inputMode="decimal"
+                    value={form.sellingPrice}
+                    onChange={(e) => setForm({ ...form, sellingPrice: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="product-field">
+                <label htmlFor="create-stock">Initial stock</label>
+                <Input
+                  id="create-stock"
+                  className="h-11 text-base"
+                  placeholder="0"
+                  type="number"
+                  min={0}
+                  step="1"
+                  inputMode="numeric"
+                  value={form.initialStock}
+                  onChange={(e) => setForm({ ...form, initialStock: e.target.value })}
+                />
+              </div>
+              <div className="h-4" aria-hidden />
+            </div>
+
+            <div className="modal-sheet-footer flex gap-2">
+              <Button
+                className="flex-1 h-11"
+                size="lg"
+                loading={createMutation.isPending}
+                onClick={() => createMutation.mutate()}
+                disabled={!form.name.trim()}
+              >
+                Save product
+              </Button>
+              <Button className="h-11" variant="ghost" onClick={() => setShowForm(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* —— Full-screen Edit product —— */}
+      {editing && (
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Edit product"
+          onClick={() => setEditing(null)}
+        >
+          <div className="modal-sheet relative z-10" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-sheet-header px-4 pb-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <h2 className="text-base font-semibold">Edit product</h2>
+                  <p className="text-xs font-mono text-muted-foreground truncate">SKU {editing.sku}</p>
+                </div>
+                <Button variant="ghost" size="icon" className="shrink-0" onClick={() => setEditing(null)}>
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="modal-sheet-body space-y-4">
+              <div className="product-field">
+                <label htmlFor="edit-name">Name *</label>
+                <Input
+                  id="edit-name"
+                  className="h-11 text-base"
                   value={editForm.name}
                   onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                   disabled={!canUpdate}
+                  autoFocus
                 />
               </div>
-              <div className="space-y-1 sm:col-span-2">
-                <label className="text-xs font-medium text-muted-foreground">Barcode</label>
+              <div className="product-field">
+                <label htmlFor="edit-barcode">Barcode</label>
                 <div className="flex gap-2">
                   <Input
+                    id="edit-barcode"
+                    className="h-11 text-base font-mono flex-1"
                     value={editForm.barcode}
                     onChange={(e) => setEditForm({ ...editForm, barcode: e.target.value })}
-                    className="font-mono flex-1"
                     disabled={!canUpdate}
                   />
                   {canUpdate && (
                     <Button
                       type="button"
                       variant="secondary"
-                      className="shrink-0 px-3"
+                      className="h-11 shrink-0 px-3"
                       loading={scanning && scanTarget === 'edit'}
                       onClick={() => void scanProductBarcode('edit')}
                     >
-                      <Camera className="h-4 w-4" />
+                      <Camera className="h-5 w-5" />
                     </Button>
                   )}
                 </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Type</label>
+              <div className="product-field">
+                <label htmlFor="edit-type">Type</label>
                 <select
-                  className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
+                  id="edit-type"
+                  className={fieldSelectClass}
                   value={editForm.type}
                   onChange={(e) => setEditForm({ ...editForm, type: e.target.value })}
                   disabled={!canUpdate}
@@ -485,68 +605,88 @@ export function ProductsPage() {
                   <option value="DRUG">Drug</option>
                 </select>
               </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Status</label>
+              <div className="product-field">
+                <label htmlFor="edit-status">Status</label>
                 <select
-                  className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
+                  id="edit-status"
+                  className={fieldSelectClass}
                   value={editForm.isActive ? 'active' : 'inactive'}
                   onChange={(e) =>
                     setEditForm({ ...editForm, isActive: e.target.value === 'active' })
                   }
                   disabled={!canUpdate}
                 >
-                  <option value="active">Active (for sale)</option>
-                  <option value="inactive">Inactive (hidden from POS)</option>
+                  <option value="active">Active — show in POS</option>
+                  <option value="inactive">Inactive — hide from POS</option>
                 </select>
               </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Cost price</label>
-                <Input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={editForm.costPrice}
-                  onChange={(e) => setEditForm({ ...editForm, costPrice: e.target.value })}
-                  disabled={!canUpdate}
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="product-field">
+                  <label htmlFor="edit-cost">Cost price</label>
+                  <Input
+                    id="edit-cost"
+                    className="h-11 text-base"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    inputMode="decimal"
+                    value={editForm.costPrice}
+                    onChange={(e) => setEditForm({ ...editForm, costPrice: e.target.value })}
+                    disabled={!canUpdate}
+                  />
+                </div>
+                <div className="product-field">
+                  <label htmlFor="edit-price">Selling price *</label>
+                  <Input
+                    id="edit-price"
+                    className="h-11 text-base font-semibold"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    inputMode="decimal"
+                    value={editForm.sellingPrice}
+                    onChange={(e) => setEditForm({ ...editForm, sellingPrice: e.target.value })}
+                    disabled={!canUpdate}
+                  />
+                </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Selling price</label>
-                <Input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={editForm.sellingPrice}
-                  onChange={(e) => setEditForm({ ...editForm, sellingPrice: e.target.value })}
-                  disabled={!canUpdate}
-                  className="font-semibold"
-                />
-              </div>
-              <div className="sm:col-span-2 flex flex-wrap gap-2 pt-1">
-                {canUpdate && (
-                  <Button
-                    loading={updateMutation.isPending}
-                    disabled={!editForm.name.trim()}
-                    onClick={() => updateMutation.mutate()}
-                  >
-                    <Pencil className="h-4 w-4" /> Save changes
-                  </Button>
-                )}
+              <div className="h-4" aria-hidden />
+            </div>
+
+            <div className="modal-sheet-footer flex flex-col gap-2">
+              {canUpdate && (
+                <Button
+                  className="w-full h-11"
+                  size="lg"
+                  loading={updateMutation.isPending}
+                  disabled={!editForm.name.trim()}
+                  onClick={() => updateMutation.mutate()}
+                >
+                  <Pencil className="h-4 w-4" /> Save changes
+                </Button>
+              )}
+              <div className="flex gap-2">
                 {canDelete && (
                   <Button
+                    className="flex-1 h-11"
                     variant="destructive"
                     loading={deleteMutation.isPending}
                     onClick={() => confirmDelete(editing)}
                   >
-                    <Trash2 className="h-4 w-4" /> Delete product
+                    <Trash2 className="h-4 w-4" /> Delete
                   </Button>
                 )}
-                <Button variant="ghost" onClick={() => setEditing(null)}>
+                <Button className="flex-1 h-11" variant="outline" onClick={() => setEditing(null)}>
                   Cancel
                 </Button>
               </div>
-            </CardContent>
-          </Card>
+              {!canUpdate && !canDelete && (
+                <p className="text-xs text-center text-muted-foreground">
+                  Your account cannot edit products. Ask the company owner for permission.
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
