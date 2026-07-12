@@ -167,6 +167,43 @@ export const exportSalesCsv = asyncHandler(async (req: Request, res: Response) =
   return res.send(csv);
 });
 
+// ── Report PDFs (table layout) ────────────────────────────
+export const salesReportPdf = asyncHandler(async (req: Request, res: Response) => {
+  const from = req.query.from ? new Date(String(req.query.from)) : undefined;
+  const to = req.query.to ? new Date(String(req.query.to)) : undefined;
+  const { salesReportPdf: build } = await import('../services/reportPdf.service');
+  const buf = await build(req.companyId, from, to);
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', 'attachment; filename="sales-report.pdf"');
+  return res.send(buf);
+});
+
+export const inventoryReportPdf = asyncHandler(async (req: Request, res: Response) => {
+  const { inventoryReportPdf: build } = await import('../services/reportPdf.service');
+  const buf = await build(req.companyId);
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', 'attachment; filename="inventory-report.pdf"');
+  return res.send(buf);
+});
+
+export const profitReportPdf = asyncHandler(async (req: Request, res: Response) => {
+  const from = req.query.from ? new Date(String(req.query.from)) : undefined;
+  const to = req.query.to ? new Date(String(req.query.to)) : undefined;
+  const { profitReportPdf: build } = await import('../services/reportPdf.service');
+  const buf = await build(req.companyId, from, to);
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', 'attachment; filename="profit-report.pdf"');
+  return res.send(buf);
+});
+
+export const customerBalancesPdf = asyncHandler(async (req: Request, res: Response) => {
+  const { customerBalancesPdf: build } = await import('../services/reportPdf.service');
+  const buf = await build(req.companyId);
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', 'attachment; filename="customer-balances.pdf"');
+  return res.send(buf);
+});
+
 // ── PDF receipt (legacy + enhanced) ───────────────────────
 function queryCurrency(req: { query: Record<string, unknown> }): string | undefined {
   const c = req.query.currency;

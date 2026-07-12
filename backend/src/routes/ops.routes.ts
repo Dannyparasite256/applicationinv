@@ -141,6 +141,14 @@ router.get('/reports/customer-balances', requirePermissions('reports.read'), ops
 router.get('/reports/sales.xlsx', requirePermissions('reports.read'), ops.exportSalesExcel);
 router.get('/reports/inventory.xlsx', requirePermissions('reports.read'), ops.exportInventoryExcel);
 router.get('/reports/sales.csv', requirePermissions('reports.read'), ops.exportSalesCsv);
+router.get('/reports/sales.pdf', requirePermissions('reports.read'), ops.salesReportPdf);
+router.get('/reports/inventory.pdf', requirePermissions('reports.read'), ops.inventoryReportPdf);
+router.get('/reports/profit.pdf', requirePermissions('reports.read'), ops.profitReportPdf);
+router.get(
+  '/reports/customer-balances.pdf',
+  requirePermissions('reports.read'),
+  ops.customerBalancesPdf
+);
 
 // Users & org (static paths before :id)
 router.get('/users/pending/count', requirePermissions('users.manage'), ops.pendingStaffCount);

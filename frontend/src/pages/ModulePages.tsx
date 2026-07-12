@@ -1970,30 +1970,372 @@ export function HrPage() {
   );
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• REPORTS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ════════════════════ REPORTS ════════════════════
+type ReportKind = 'sales' | 'inventory' | 'profit' | 'balances';
+
+function ReportTable({ kind, data }: { kind: ReportKind; data: unknown }) {
+  if (data == null) return null;
+
+  if (kind === 'sales') {
+    const d = data as {
+      from?: string;
+      to?: string;
+      totals?: { count: number; total: number; paid: number; tax: number; discount: number };
+      sales?: Array<{
+        saleNo: string;
+        saleDate: string;
+        total: number | string;
+        paidAmount: number | string;
+        taxAmount: number | string;
+        discountAmount: number | string;
+        subtotal: number | string;
+        paymentStatus?: string;
+        status?: string;
+        customer?: { firstName?: string; lastName?: string; businessName?: string } | null;
+        cashier?: { firstName?: string; lastName?: string } | null;
+      }>;
+    };
+    const rows = d.sales || [];
+    return (
+      <div className="space-y-3">
+        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+          <span>
+            Period: {d.from ? new Date(d.from).toLocaleDateString() : '—'} –{' '}
+            {d.to ? new Date(d.to).toLocaleDateString() : '—'}
+          </span>
+          <span>{d.totals?.count ?? rows.length} sales</span>
+          <span className="font-semibold text-foreground">
+            Total {formatCurrency(Number(d.totals?.total || 0))}
+          </span>
+        </div>
+        <div className="table-scroll rounded-xl border border-border max-h-[28rem] overflow-auto">
+          <table className="w-full text-xs">
+            <thead className="sticky top-0 bg-muted/95 backdrop-blur z-[1]">
+              <tr className="text-left text-muted-foreground border-b border-border">
+                <th className="p-2.5 font-semibold">Date</th>
+                <th className="p-2.5 font-semibold">Sale #</th>
+                <th className="p-2.5 font-semibold">Customer</th>
+                <th className="p-2.5 font-semibold">Cashier</th>
+                <th className="p-2.5 font-semibold text-right">Subtotal</th>
+                <th className="p-2.5 font-semibold text-right">Tax</th>
+                <th className="p-2.5 font-semibold text-right">Total</th>
+                <th className="p-2.5 font-semibold text-right">Paid</th>
+                <th className="p-2.5 font-semibold">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((s, i) => {
+                const cust =
+                  s.customer?.businessName ||
+                  `${s.customer?.firstName || ''} ${s.customer?.lastName || ''}`.trim() ||
+                  'Walk-in';
+                const cash = s.cashier
+                  ? `${s.cashier.firstName || ''} ${s.cashier.lastName || ''}`.trim()
+                  : '—';
+                return (
+                  <tr
+                    key={s.saleNo + i}
+                    className="border-b border-border/60 odd:bg-muted/20 hover:bg-primary/5"
+                  >
+                    <td className="p-2.5 whitespace-nowrap">
+                      {s.saleDate ? new Date(s.saleDate).toLocaleString() : '—'}
+                    </td>
+                    <td className="p-2.5 font-mono font-medium">{s.saleNo}</td>
+                    <td className="p-2.5 max-w-[8rem] truncate">{cust}</td>
+                    <td className="p-2.5 truncate max-w-[6rem]">{cash}</td>
+                    <td className="p-2.5 text-right tabular-nums">
+                      {formatCurrency(Number(s.subtotal))}
+                    </td>
+                    <td className="p-2.5 text-right tabular-nums">
+                      {formatCurrency(Number(s.taxAmount))}
+                    </td>
+                    <td className="p-2.5 text-right tabular-nums font-semibold">
+                      {formatCurrency(Number(s.total))}
+                    </td>
+                    <td className="p-2.5 text-right tabular-nums">
+                      {formatCurrency(Number(s.paidAmount))}
+                    </td>
+                    <td className="p-2.5">
+                      <Badge variant="secondary" className="text-[10px]">
+                        {s.paymentStatus || s.status || '—'}
+                      </Badge>
+                    </td>
+                  </tr>
+                );
+              })}
+              {!rows.length && (
+                <tr>
+                  <td colSpan={9} className="p-8 text-center text-muted-foreground">
+                    No sales in this period
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  if (kind === 'inventory') {
+    const d = data as {
+      totalSkus?: number;
+      totalUnits?: number;
+      totalValue?: number;
+      lowStockCount?: number;
+      rows?: Array<{
+        sku: string;
+        name: string;
+        category?: string;
+        quantity: number;
+        costPrice: number;
+        sellingPrice: number;
+        value: number;
+        reorderLevel: number;
+        lowStock: boolean;
+      }>;
+    };
+    const rows = d.rows || [];
+    return (
+      <div className="space-y-3">
+        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+          <span>{d.totalSkus ?? rows.length} SKUs</span>
+          <span>{d.totalUnits ?? 0} units</span>
+          <span className="font-semibold text-foreground">
+            Value {formatCurrency(Number(d.totalValue || 0))}
+          </span>
+          <span className="text-destructive">{d.lowStockCount ?? 0} low stock</span>
+        </div>
+        <div className="table-scroll rounded-xl border border-border max-h-[28rem] overflow-auto">
+          <table className="w-full text-xs">
+            <thead className="sticky top-0 bg-muted/95 backdrop-blur z-[1]">
+              <tr className="text-left text-muted-foreground border-b border-border">
+                <th className="p-2.5 font-semibold">SKU</th>
+                <th className="p-2.5 font-semibold">Product</th>
+                <th className="p-2.5 font-semibold">Category</th>
+                <th className="p-2.5 font-semibold text-right">Qty</th>
+                <th className="p-2.5 font-semibold text-right">Cost</th>
+                <th className="p-2.5 font-semibold text-right">Sell</th>
+                <th className="p-2.5 font-semibold text-right">Value</th>
+                <th className="p-2.5 font-semibold">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr
+                  key={r.sku + i}
+                  className="border-b border-border/60 odd:bg-muted/20 hover:bg-primary/5"
+                >
+                  <td className="p-2.5 font-mono">{r.sku}</td>
+                  <td className="p-2.5 font-medium max-w-[12rem] truncate">{r.name}</td>
+                  <td className="p-2.5 text-muted-foreground">{r.category || '—'}</td>
+                  <td className="p-2.5 text-right tabular-nums">{r.quantity}</td>
+                  <td className="p-2.5 text-right tabular-nums">
+                    {formatCurrency(Number(r.costPrice))}
+                  </td>
+                  <td className="p-2.5 text-right tabular-nums">
+                    {formatCurrency(Number(r.sellingPrice))}
+                  </td>
+                  <td className="p-2.5 text-right tabular-nums font-semibold">
+                    {formatCurrency(Number(r.value))}
+                  </td>
+                  <td className="p-2.5">
+                    <Badge variant={r.lowStock ? 'destructive' : 'success'} className="text-[10px]">
+                      {r.lowStock ? 'LOW' : 'OK'}
+                    </Badge>
+                  </td>
+                </tr>
+              ))}
+              {!rows.length && (
+                <tr>
+                  <td colSpan={8} className="p-8 text-center text-muted-foreground">
+                    No inventory rows
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  if (kind === 'profit') {
+    const d = data as {
+      from?: string;
+      to?: string;
+      revenue?: number;
+      cogs?: number;
+      grossProfit?: number;
+      grossMargin?: number;
+      purchases?: number;
+    };
+    const lines = [
+      { label: 'Revenue (sales)', value: d.revenue },
+      { label: 'Cost of goods sold', value: d.cogs },
+      { label: 'Gross profit', value: d.grossProfit, emphasis: true },
+      { label: 'Purchases (period)', value: d.purchases },
+    ];
+    return (
+      <div className="space-y-3">
+        <p className="text-xs text-muted-foreground">
+          {d.from ? new Date(d.from).toLocaleDateString() : '—'} –{' '}
+          {d.to ? new Date(d.to).toLocaleDateString() : '—'}
+          {d.grossMargin != null ? ` · Margin ${Number(d.grossMargin).toFixed(1)}%` : ''}
+        </p>
+        <div className="table-scroll rounded-xl border border-border overflow-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/80">
+              <tr className="text-left text-muted-foreground border-b border-border">
+                <th className="p-3 font-semibold">Line item</th>
+                <th className="p-3 font-semibold text-right">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map((l) => (
+                <tr
+                  key={l.label}
+                  className={`border-b border-border/60 ${l.emphasis ? 'bg-primary/5 font-semibold' : 'odd:bg-muted/20'}`}
+                >
+                  <td className="p-3">{l.label}</td>
+                  <td className="p-3 text-right tabular-nums">
+                    {formatCurrency(Number(l.value || 0))}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  // balances
+  const rows = (Array.isArray(data) ? data : []) as Array<{
+    code?: string;
+    firstName?: string;
+    lastName?: string;
+    businessName?: string;
+    phone?: string;
+    balance?: number | string;
+    creditLimit?: number | string | null;
+  }>;
+  const total = rows.reduce((s, r) => s + Number(r.balance || 0), 0);
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        {rows.length} customers · Outstanding{' '}
+        <span className="font-semibold text-foreground">{formatCurrency(total)}</span>
+      </p>
+      <div className="table-scroll rounded-xl border border-border max-h-[28rem] overflow-auto">
+        <table className="w-full text-xs">
+          <thead className="sticky top-0 bg-muted/95 backdrop-blur z-[1]">
+            <tr className="text-left text-muted-foreground border-b border-border">
+              <th className="p-2.5 font-semibold">Code</th>
+              <th className="p-2.5 font-semibold">Customer</th>
+              <th className="p-2.5 font-semibold">Phone</th>
+              <th className="p-2.5 font-semibold text-right">Balance</th>
+              <th className="p-2.5 font-semibold text-right">Credit limit</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => {
+              const name =
+                r.businessName || `${r.firstName || ''} ${r.lastName || ''}`.trim() || '—';
+              return (
+                <tr key={(r.code || '') + i} className="border-b border-border/60 odd:bg-muted/20">
+                  <td className="p-2.5 font-mono">{r.code || '—'}</td>
+                  <td className="p-2.5 font-medium">{name}</td>
+                  <td className="p-2.5 text-muted-foreground">{r.phone || '—'}</td>
+                  <td className="p-2.5 text-right tabular-nums font-semibold">
+                    {formatCurrency(Number(r.balance || 0))}
+                  </td>
+                  <td className="p-2.5 text-right tabular-nums">
+                    {r.creditLimit != null ? formatCurrency(Number(r.creditLimit)) : '—'}
+                  </td>
+                </tr>
+              );
+            })}
+            {!rows.length && (
+              <tr>
+                <td colSpan={5} className="p-8 text-center text-muted-foreground">
+                  No outstanding balances
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export function ReportsPage() {
-  const reports = [
-    { name: 'Sales Report', desc: 'All sales with totals', excel: '/reports/sales.xlsx', csv: '/reports/sales.csv', view: '/reports/sales' },
-    { name: 'Inventory Valuation', desc: 'Stock qty & value', excel: '/reports/inventory.xlsx', view: '/reports/inventory' },
-    { name: 'Profit & Loss', desc: 'Revenue, COGS, margin', view: '/reports/profit' },
-    { name: 'Customer Balances', desc: 'Outstanding AR', view: '/reports/customer-balances' },
+  const reports: Array<{
+    name: string;
+    desc: string;
+    kind: ReportKind;
+    view: string;
+    pdf: string;
+    excel?: string;
+    csv?: string;
+  }> = [
+    {
+      name: 'Sales Report',
+      desc: 'All sales with totals',
+      kind: 'sales',
+      excel: '/reports/sales.xlsx',
+      csv: '/reports/sales.csv',
+      view: '/reports/sales',
+      pdf: '/reports/sales.pdf',
+    },
+    {
+      name: 'Inventory Valuation',
+      desc: 'Stock qty & value',
+      kind: 'inventory',
+      excel: '/reports/inventory.xlsx',
+      view: '/reports/inventory',
+      pdf: '/reports/inventory.pdf',
+    },
+    {
+      name: 'Profit & Loss',
+      desc: 'Revenue, COGS, margin',
+      kind: 'profit',
+      view: '/reports/profit',
+      pdf: '/reports/profit.pdf',
+    },
+    {
+      name: 'Customer Balances',
+      desc: 'Outstanding AR',
+      kind: 'balances',
+      view: '/reports/customer-balances',
+      pdf: '/reports/customer-balances.pdf',
+    },
   ];
 
   const [preview, setPreview] = useState<unknown>(null);
   const [previewTitle, setPreviewTitle] = useState('');
+  const [previewKind, setPreviewKind] = useState<ReportKind | null>(null);
+  const [previewPdf, setPreviewPdf] = useState<string | null>(null);
+  const [loadingView, setLoadingView] = useState(false);
 
-  const loadPreview = async (path: string, title: string) => {
+  const loadPreview = async (path: string, title: string, kind: ReportKind, pdf: string) => {
+    setLoadingView(true);
     try {
       const res = await api.get(path);
       setPreview(res.data.data);
       setPreviewTitle(title);
+      setPreviewKind(kind);
+      setPreviewPdf(pdf);
     } catch (e) {
       toast.error(getErrorMessage(e));
+    } finally {
+      setLoadingView(false);
     }
   };
 
   return (
-    <PageShell title="Reports" description="Live reports â€” export Excel, CSV, or print">
+    <PageShell title="Reports" description="Live reports — table view, PDF, Excel, CSV">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {reports.map((r) => (
           <Card key={r.name} className="hover:border-primary/50 transition-colors">
@@ -2002,8 +2344,24 @@ export function ReportsPage() {
               <CardDescription>{r.desc}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={() => loadPreview(r.view, r.name)}>
+              <Button
+                size="sm"
+                variant="outline"
+                loading={loadingView}
+                onClick={() => loadPreview(r.view, r.name, r.kind, r.pdf)}
+              >
                 View
+              </Button>
+              <Button
+                size="sm"
+                variant="default"
+                onClick={() =>
+                  downloadAuth(r.pdf, `${r.name.replace(/\s+/g, '-').toLowerCase()}.pdf`)
+                    .then(() => toast.success('PDF downloaded'))
+                    .catch((e) => toast.error(getErrorMessage(e)))
+                }
+              >
+                <FileText className="h-3.5 w-3.5" /> PDF
               </Button>
               {r.excel && (
                 <Button
@@ -2036,18 +2394,33 @@ export function ReportsPage() {
         ))}
       </div>
 
-      {preview != null && (
-        <Card>
-          <CardHeader className="flex-row items-center justify-between">
+      {preview != null && previewKind && (
+        <Card className="print:shadow-none">
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
             <CardTitle className="text-base">{previewTitle}</CardTitle>
-            <Button size="sm" variant="ghost" onClick={() => window.print()}>
-              <Printer className="h-4 w-4" /> Print
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              {previewPdf && (
+                <Button
+                  size="sm"
+                  onClick={() =>
+                    downloadAuth(
+                      previewPdf,
+                      `${previewTitle.replace(/\s+/g, '-').toLowerCase()}.pdf`
+                    )
+                      .then(() => toast.success('PDF downloaded'))
+                      .catch((e) => toast.error(getErrorMessage(e)))
+                  }
+                >
+                  <FileText className="h-4 w-4" /> Download PDF
+                </Button>
+              )}
+              <Button size="sm" variant="ghost" onClick={() => window.print()}>
+                <Printer className="h-4 w-4" /> Print page
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
-            <pre className="text-xs overflow-auto max-h-96 bg-muted/40 p-4 rounded-lg">
-              {JSON.stringify(preview, null, 2)}
-            </pre>
+            <ReportTable kind={previewKind} data={preview} />
           </CardContent>
         </Card>
       )}
