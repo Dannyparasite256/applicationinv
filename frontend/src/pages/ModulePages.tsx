@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
 import { getApiBaseUrl } from '@/lib/config';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, parseMoneyToBase, displayCurrencyCode } from '@/lib/utils';
 import { getMediaUrl, brandInitials } from '@/lib/media';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -957,17 +957,18 @@ export function InvoicesPage() {
   });
 
   const linePreview = useMemo(() => {
+    // Line prices are entered in display currency; convert to base for preview/formatCurrency
     let sub = 0;
     let tax = 0;
     for (const l of lines) {
       const qty = parseFloat(l.quantity) || 0;
-      const price = parseFloat(l.unitPrice) || 0;
+      const price = parseMoneyToBase(l.unitPrice);
       const rate = parseFloat(l.taxRate) || 0;
       const lineSub = qty * price;
       sub += lineSub;
       tax += (lineSub * rate) / 100;
     }
-    const disc = Math.max(0, parseFloat(discount) || 0);
+    const disc = Math.max(0, parseMoneyToBase(discount));
     return { sub, tax, disc, total: Math.max(0, sub + tax - disc) };
   }, [lines, discount]);
 
@@ -984,7 +985,8 @@ export function InvoicesPage() {
         .filter((l) => l.description.trim())
         .map((l) => {
           const quantity = parseFloat(l.quantity) || 0;
-          const unitPrice = parseFloat(l.unitPrice) || 0;
+          // Prices typed in display currency → company base for API
+          const unitPrice = parseMoneyToBase(l.unitPrice);
           const taxRate = parseFloat(l.taxRate) || 0;
           return {
             description: l.description.trim(),
@@ -1000,7 +1002,7 @@ export function InvoicesPage() {
         customerId: customerId || null,
         dueDate: dueDate ? new Date(dueDate).toISOString() : null,
         notes: notes.trim() || null,
-        discountAmount: Math.max(0, parseFloat(discount) || 0),
+        discountAmount: Math.max(0, parseMoneyToBase(discount)),
         items,
       });
     },
@@ -1244,7 +1246,9 @@ export function InvoicesPage() {
                       />
                     </div>
                     <div className="sm:col-span-2 space-y-1">
-                      <label className="text-[11px] text-muted-foreground">Unit price</label>
+                      <label className="text-[11px] text-muted-foreground">
+                        Unit price ({displayCurrencyCode()})
+                      </label>
                       <Input
                         type="number"
                         min={0}

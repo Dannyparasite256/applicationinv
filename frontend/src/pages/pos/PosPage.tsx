@@ -22,7 +22,7 @@ import {
   PackageSearch,
 } from 'lucide-react';
 import { api, getErrorMessage } from '@/lib/api';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, parseMoneyToBase, displayCurrencyCode } from '@/lib/utils';
 import { usePosStore } from '@/stores/posStore';
 import { useNetworkStore } from '@/stores/networkStore';
 import { useCurrencyStore } from '@/stores/currencyStore';
@@ -794,13 +794,14 @@ export function PosPage() {
                   type="number"
                   min={0}
                   step="0.01"
-                  placeholder="Discount amount"
+                  placeholder={`Discount (${displayCurrencyCode()})`}
                   value={discountInput}
                   onChange={(e) => {
                     const v = e.target.value;
                     setDiscountInput(v);
-                    const n = parseFloat(v);
-                    setDiscount(Number.isFinite(n) && n > 0 ? n : 0);
+                    // Typed in display currency → store discount in company base
+                    const n = parseMoneyToBase(v);
+                    setDiscount(n > 0 ? n : 0);
                   }}
                 />
               )}

@@ -4,9 +4,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, Package, Camera, ScanBarcode, Pencil, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, moneyInputFromBase, parseMoneyToBase } from '@/lib/utils';
 import { scanBarcode, canUseCameraScan } from '@/native/barcodeScan';
 import { useAuthStore } from '@/stores/authStore';
+import { useCurrencyStore } from '@/stores/currencyStore';
 import { isManager } from '@/lib/roleAccess';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -69,6 +70,7 @@ export function ProductsPage() {
   const hasPermission = useAuthStore((s) => s.hasPermission);
   const roles = useAuthStore((s) => s.user?.roles || []);
   const manager = isManager(roles);
+  const moneyCode = useCurrencyStore((s) => s.displayCurrency || s.baseCurrency || 'USD');
 
   // Owners/managers always can manage products; staff need explicit permission
   const canCreate = hasPermission('inventory.products.create') || manager;
@@ -128,11 +130,12 @@ export function ProductsPage() {
   const createMutation = useMutation({
     mutationFn: async () => {
       const sku = form.sku.trim();
+      // Form prices are in the user's display currency → convert to company base for API
       const res = await api.post('/products', {
         name: form.name.trim(),
         ...(sku ? { sku } : {}),
-        sellingPrice: Number.parseFloat(form.sellingPrice) || 0,
-        costPrice: Number.parseFloat(form.costPrice) || 0,
+        sellingPrice: parseMoneyToBase(form.sellingPrice),
+        costPrice: parseMoneyToBase(form.costPrice),
         barcode: form.barcode.trim() || null,
         type: form.type || 'PRODUCT',
         initialStock: Math.max(0, Number.parseFloat(form.initialStock) || 0),
@@ -156,10 +159,11 @@ export function ProductsPage() {
       if (!editing) throw new Error('No product selected');
       const name = editForm.name.trim();
       if (!name) throw new Error('Product name is required');
+      // Form prices are in display currency → convert to company base for storage
       const payload = {
         name,
-        sellingPrice: Number.parseFloat(String(editForm.sellingPrice)) || 0,
-        costPrice: Number.parseFloat(String(editForm.costPrice)) || 0,
+        sellingPrice: parseMoneyToBase(editForm.sellingPrice),
+        costPrice: parseMoneyToBase(editForm.costPrice),
         barcode: editForm.barcode.trim() ? editForm.barcode.trim() : null,
         type: editForm.type || 'PRODUCT',
         isActive: Boolean(editForm.isActive),
@@ -223,11 +227,12 @@ export function ProductsPage() {
       return;
     }
     setEditing(p);
+    // Show prices in the user's chosen display currency (not raw base)
     setEditForm({
       name: p.name || '',
       sku: p.sku || '',
-      sellingPrice: String(Number(p.sellingPrice) || 0),
-      costPrice: String(Number(p.costPrice) || 0),
+      sellingPrice: moneyInputFromBase(p.sellingPrice),
+      costPrice: moneyInputFromBase(p.costPrice),
       barcode: p.barcode || '',
       type: p.type || 'PRODUCT',
       initialStock: '0',
@@ -390,7 +395,7 @@ export function ProductsPage() {
                 </div>
                 <div className="product-field-row">
                   <div className="product-field">
-                    <label htmlFor="create-cost">Cost</label>
+                    <label htmlFor="create-cost">Cost ({moneyCode})</label>
                     <Input
                       id="create-cost"
                       className={inputClass}
@@ -404,7 +409,7 @@ export function ProductsPage() {
                     />
                   </div>
                   <div className="product-field">
-                    <label htmlFor="create-price">Sell price</label>
+                    <label htmlFor="create-price">Sell price ({moneyCode})</label>
                     <Input
                       id="create-price"
                       className={`${inputClass} font-semibold`}
@@ -519,7 +524,7 @@ export function ProductsPage() {
 
                 <div className="product-field-row">
                   <div className="product-field">
-                    <label htmlFor="edit-cost">Cost price</label>
+                    <label htmlFor="edit-cost">Cost ({moneyCode})</label>
                     <Input
                       id="edit-cost"
                       className={inputClass}
@@ -533,7 +538,7 @@ export function ProductsPage() {
                     />
                   </div>
                   <div className="product-field">
-                    <label htmlFor="edit-price">Sell price *</label>
+                    <label htmlFor="edit-price">Sell price ({moneyCode}) *</label>
                     <Input
                       id="edit-price"
                       className={`${inputClass} font-semibold`}

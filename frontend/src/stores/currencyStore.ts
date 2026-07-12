@@ -140,13 +140,18 @@ export const useCurrencyStore = create<CurrencyState>()(
 
       convert: (amount, from, to) => {
         const { baseCurrency, rates, displayCurrency } = get();
-        const f = (from || baseCurrency).toUpperCase();
-        const t = (to || displayCurrency).toUpperCase();
+        const base = (baseCurrency || 'USD').toUpperCase();
+        const f = (from || base).toUpperCase();
+        const t = (to || displayCurrency || base).toUpperCase();
         if (!Number.isFinite(amount)) return 0;
         if (f === t) return amount;
-        const fromRate = rates[f] ?? (f === baseCurrency ? 1 : undefined);
-        const toRate = rates[t] ?? (t === baseCurrency ? 1 : undefined);
-        if (!fromRate || !toRate) return amount; // fallback no conversion
+        // rates[code] = units of base per 1 unit of code
+        const fromRate = f === base ? 1 : rates[f];
+        const toRate = t === base ? 1 : rates[t];
+        if (fromRate == null || fromRate <= 0 || toRate == null || toRate <= 0) {
+          // Missing live rate — avoid silently treating foreign currency as 1:1
+          return amount;
+        }
         const inBase = amount * fromRate;
         return toRate === 0 ? 0 : inBase / toRate;
       },
