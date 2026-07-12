@@ -682,6 +682,151 @@ export async function resetCompanyUserPassword(
   };
 }
 
+/**
+ * Super Admin: paginated sales for one business (read-only monitoring).
+ */
+export async function listCompanySales(
+  isSuperAdmin: boolean | undefined,
+  companyId: string,
+  params: PaginationParams & {
+    from?: Date;
+    to?: Date;
+    status?: string;
+    paymentStatus?: string;
+  }
+) {
+  assertSuperAdmin(isSuperAdmin);
+
+  const company = await prisma.company.findFirst({
+    where: { id: companyId, deletedAt: null },
+    select: { id: true, name: true, slug: true, currency: true },
+  });
+  if (!company) throw new NotFoundError('Company');
+
+  const where: Prisma.SaleWhereInput = {
+    companyId,
+    deletedAt: null,
+    ...(params.status ? { status: params.status as never } : {}),
+    ...(params.paymentStatus ? { paymentStatus: params.paymentStatus as never } : {}),
+    ...(params.from || params.to
+      ? {
+          saleDate: {
+            ...(params.from ? { gte: params.from } : {}),
+            ...(params.to ? { lte: params.to } : {}),
+          },
+        }
+      : {}),
+    ...(params.search
+      ? {
+          OR: [
+            { saleNo: { contains: params.search, mode: 'insensitive' } },
+            { notes: { contains: params.search, mode: 'insensitive' } },
+            { customer: { firstName: { contains: params.search, mode: 'insensitive' } } },
+            { customer: { lastName: { contains: params.search, mode: 'insensitive' } } },
+            { customer: { businessName: { contains: params.search, mode: 'insensitive' } } },
+            { cashier: { firstName: { contains: params.search, mode: 'insensitive' } } },
+            { cashier: { lastName: { contains: params.search, mode: 'insensitive' } } },
+            { cashier: { email: { contains: params.search, mode: 'insensitive' } } },
+          ],
+        }
+      : {}),
+  };
+
+  const activeWhere: Prisma.SaleWhereInput = {
+    ...where,
+    status: { notIn: ['CANCELLED', 'RETURNED'] },
+    paymentStatus: { notIn: ['REFUNDED', 'VOID'] },
+  };
+
+  const [total, data, summary] = await Promise.all([
+    prisma.sale.count({ where }),
+    prisma.sale.findMany({
+      where,
+      skip: params.skip,
+      take: params.limit,
+      orderBy: buildOrderBy(params.sortBy || 'saleDate', params.sortOrder || 'desc'),
+      include: {
+        customer: {
+          select: { id: true, firstName: true, lastName: true, businessName: true },
+        },
+        cashier: {
+          select: { id: true, firstName: true, lastName: true, email: true },
+        },
+        branch: { select: { id: true, name: true } },
+        _count: { select: { items: true } },
+      },
+    }),
+    prisma.sale.aggregate({
+      where: activeWhere,
+      _sum: { total: true, taxAmount: true, discountAmount: true, paidAmount: true },
+      _count: true,
+      _avg: { total: true },
+    }),
+  ]);
+
+  return {
+    company,
+    data,
+    total,
+    summary: {
+      filteredCount: total,
+      activeCount: summary._count,
+      revenue: Number(summary._sum.total || 0),
+      tax: Number(summary._sum.taxAmount || 0),
+      discount: Number(summary._sum.discountAmount || 0),
+      paid: Number(summary._sum.paidAmount || 0),
+      averageTicket: Number(summary._avg.total || 0),
+      currency: company.currency || 'USD',
+    },
+  };
+}
+
+/**
+ * Super Admin: single sale detail for a business (read-only).
+ */
+export async function getCompanySale(
+  isSuperAdmin: boolean | undefined,
+  companyId: string,
+  saleId: string
+) {
+  assertSuperAdmin(isSuperAdmin);
+
+  const company = await prisma.company.findFirst({
+    where: { id: companyId, deletedAt: null },
+    select: { id: true, name: true, slug: true, currency: true },
+  });
+  if (!company) throw new NotFoundError('Company');
+
+  const sale = await prisma.sale.findFirst({
+    where: { id: saleId, companyId, deletedAt: null },
+    include: {
+      items: {
+        include: {
+          product: { select: { id: true, name: true, sku: true, imageUrl: true } },
+        },
+      },
+      payments: true,
+      customer: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          businessName: true,
+          email: true,
+          phone: true,
+        },
+      },
+      cashier: {
+        select: { id: true, firstName: true, lastName: true, email: true },
+      },
+      branch: { select: { id: true, name: true } },
+    },
+  });
+  if (!sale) throw new NotFoundError('Sale');
+
+  return { company, sale };
+}
+
 export async function updateCompanyStatus(
   isSuperAdmin: boolean | undefined,
   companyId: string,

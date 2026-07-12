@@ -69,6 +69,56 @@ export const companyCredentials = asyncHandler(async (req: Request, res: Respons
   return success(res, data);
 });
 
+export const companySales = asyncHandler(async (req: Request, res: Response) => {
+  const page = Math.max(1, parseInt(String(req.query.page || '1'), 10) || 1);
+  const limit = Math.min(
+    100,
+    Math.max(1, parseInt(String(req.query.limit || '25'), 10) || 25)
+  );
+  const sortBy = String(req.query.sortBy || 'saleDate');
+  const sortOrder = String(req.query.sortOrder || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc';
+  const search = req.query.search ? String(req.query.search).trim() : undefined;
+  const pagination = {
+    page,
+    limit,
+    skip: (page - 1) * limit,
+    sortBy,
+    sortOrder: sortOrder as 'asc' | 'desc',
+    search,
+  };
+  const { company, data, total, summary } = await platformService.listCompanySales(
+    req.user?.isSuperAdmin,
+    req.params.id,
+    {
+      ...pagination,
+      status: req.query.status ? String(req.query.status) : undefined,
+      paymentStatus: req.query.paymentStatus ? String(req.query.paymentStatus) : undefined,
+      from: req.query.from ? new Date(String(req.query.from)) : undefined,
+      to: req.query.to ? new Date(String(req.query.to)) : undefined,
+    }
+  );
+  const totalPages = Math.ceil(total / pagination.limit) || 1;
+  return success(res, data, 'Success', 200, {
+    page: pagination.page,
+    limit: pagination.limit,
+    total,
+    totalPages,
+    hasNext: pagination.page < totalPages,
+    hasPrev: pagination.page > 1,
+    company,
+    summary,
+  });
+});
+
+export const companySaleDetail = asyncHandler(async (req: Request, res: Response) => {
+  const data = await platformService.getCompanySale(
+    req.user?.isSuperAdmin,
+    req.params.id,
+    req.params.saleId
+  );
+  return success(res, data);
+});
+
 export const resetCompanyUserPassword = asyncHandler(async (req: Request, res: Response) => {
   const data = await platformService.resetCompanyUserPassword(
     req.user?.isSuperAdmin,

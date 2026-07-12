@@ -86,7 +86,7 @@ export function PlatformBusinessesPage() {
     companiesRes?.meta?.totalPages || Math.ceil(total / pageSize) || 1
   );
 
-  const openBusiness = (id: string, tab?: 'passwords') => {
+  const openBusiness = (id: string, tab?: 'passwords' | 'sales') => {
     navigate(`/app/platform/businesses/${id}${tab ? `?tab=${tab}` : ''}`);
   };
 
@@ -228,7 +228,8 @@ export function PlatformBusinessesPage() {
                   </p>
                   <p>
                     {c._count.users} users · {c._count.products} products ·{' '}
-                    {formatCurrency(c.metrics.revenue30d, c.currency || 'USD')} GMV
+                    {formatNumber(c._count.sales)} sales ·{' '}
+                    {formatCurrency(c.metrics.revenue30d, c.currency || 'USD')} GMV (30d)
                   </p>
                 </div>
                 <div className="mt-2.5 flex gap-2" onClick={(e) => e.stopPropagation()}>
@@ -239,6 +240,13 @@ export function PlatformBusinessesPage() {
                     onClick={() => openBusiness(c.id)}
                   >
                     Open / edit
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => openBusiness(c.id, 'sales')}
+                  >
+                    Sales
                   </Button>
                   <Button
                     size="sm"
@@ -262,6 +270,7 @@ export function PlatformBusinessesPage() {
                   <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 font-medium text-right">Users</th>
                   <th className="px-4 py-3 font-medium text-right">Products</th>
+                  <th className="px-4 py-3 font-medium text-right">Sales</th>
                   <th className="px-4 py-3 font-medium text-right">GMV 30d</th>
                   <th className="px-4 py-3 font-medium">Registered</th>
                   <th className="px-4 py-3 font-medium">Actions</th>
@@ -270,14 +279,14 @@ export function PlatformBusinessesPage() {
               <tbody>
                 {isLoading && (
                   <tr>
-                    <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
+                    <td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">
                       Loading businesses…
                     </td>
                   </tr>
                 )}
                 {!isLoading && companies.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
+                    <td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">
                       No businesses found
                     </td>
                   </tr>
@@ -314,6 +323,21 @@ export function PlatformBusinessesPage() {
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums">{c._count.users}</td>
                     <td className="px-4 py-3 text-right tabular-nums">{c._count.products}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      <button
+                        type="button"
+                        className="text-primary font-medium hover:underline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openBusiness(c.id, 'sales');
+                        }}
+                      >
+                        {formatNumber(c._count.sales)}
+                      </button>
+                      <p className="text-[10px] text-muted-foreground">
+                        {c.metrics.sales30d} / 30d
+                      </p>
+                    </td>
                     <td className="px-4 py-3 text-right tabular-nums font-medium">
                       {formatCurrency(c.metrics.revenue30d, c.currency || 'USD')}
                     </td>
@@ -324,6 +348,13 @@ export function PlatformBusinessesPage() {
                       <div className="flex flex-wrap gap-1">
                         <Button size="sm" variant="outline" onClick={() => openBusiness(c.id)}>
                           Open
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => openBusiness(c.id, 'sales')}
+                        >
+                          Sales
                         </Button>
                         <Button
                           size="sm"

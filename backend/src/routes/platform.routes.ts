@@ -16,6 +16,8 @@ router.use(authenticate, requireRoles(RoleCode.SUPER_ADMIN));
 router.get('/overview', platformController.overview);
 router.get('/companies', platformController.listCompanies);
 router.get('/companies/:id', platformController.getCompany);
+router.get('/companies/:id/sales', platformController.companySales);
+router.get('/companies/:id/sales/:saleId', platformController.companySaleDetail);
 router.get('/companies/:id/credentials', platformController.companyCredentials);
 router.post(
   '/companies/:id/users/:userId/password',
