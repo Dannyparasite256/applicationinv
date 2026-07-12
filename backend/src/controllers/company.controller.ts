@@ -110,6 +110,21 @@ export const listEmployees = asyncHandler(async (req: Request, res: Response) =>
   return success(res, employees);
 });
 
+/** Tenant activity feed — recent audit events for this company */
+export const listActivity = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.companyId) throw new ForbiddenError('Company context required');
+  const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
+  const logs = await prisma.auditLog.findMany({
+    where: { companyId: req.companyId },
+    orderBy: { createdAt: 'desc' },
+    take: limit,
+    include: {
+      user: { select: { id: true, email: true, firstName: true, lastName: true } },
+    },
+  });
+  return success(res, logs);
+});
+
 export const listNotifications = asyncHandler(async (req: Request, res: Response) => {
   const notifications = await prisma.notification.findMany({
     where: { userId: req.user!.id },

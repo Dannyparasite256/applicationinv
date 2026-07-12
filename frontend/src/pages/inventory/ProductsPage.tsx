@@ -2,18 +2,22 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Package, Camera, ScanBarcode, Pencil, Trash2, X } from 'lucide-react';
+import { Plus, Search, Package, Camera, ScanBarcode, Pencil, Trash2, X, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '@/lib/api';
 import { formatCurrency, moneyInputFromBase, parseMoneyToBase } from '@/lib/utils';
+import { getMediaUrl } from '@/lib/media';
+import { printProductLabel } from '@/lib/labelPrint';
 import { scanBarcode, canUseCameraScan } from '@/native/barcodeScan';
 import { useAuthStore } from '@/stores/authStore';
 import { useCurrencyStore } from '@/stores/currencyStore';
+import { usePreferencesStore } from '@/stores/preferencesStore';
 import { isManager } from '@/lib/roleAccess';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { Card, CardContent } from '@/components/ui/Card';
+import { EmptyState } from '@/components/shared/EmptyState';
 
 interface Product {
   id: string;
@@ -25,6 +29,7 @@ interface Product {
   costPrice: string | number;
   isActive: boolean;
   stockQty?: number;
+  imageUrl?: string | null;
   category?: { name: string } | null;
 }
 
@@ -37,6 +42,7 @@ type ProductForm = {
   type: string;
   initialStock: string;
   isActive: boolean;
+  imageUrl: string;
 };
 
 const emptyForm = (): ProductForm => ({
@@ -48,6 +54,7 @@ const emptyForm = (): ProductForm => ({
   type: 'PRODUCT',
   initialStock: '0',
   isActive: true,
+  imageUrl: '',
 });
 
 const PRODUCT_TYPES = [
@@ -61,7 +68,9 @@ const inputClass = 'h-10 w-full rounded-lg border border-input bg-background px-
 export function ProductsPage() {
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState(() => searchParams.get('q') || '');
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(() => searchParams.get('new') === '1');
+  const completeOnboardingStep = usePreferencesStore((s) => s.completeOnboardingStep);
+  const companyName = useAuthStore((s) => s.user?.company?.name);
   const [form, setForm] = useState(emptyForm);
   const [editing, setEditing] = useState<Product | null>(null);
   const [editForm, setEditForm] = useState(emptyForm);
@@ -74,10 +83,16 @@ export function ProductsPage() {
   const manager = isManager(roles);
   const moneyCode = useCurrencyStore((s) => s.displayCurrency || s.baseCurrency || 'USD');
 
-  // Global search / deep link: /app/products?q=name
+  // Global search / deep link: /app/products?q=name&barcode=&new=1
   useEffect(() => {
     const q = searchParams.get('q');
     if (q != null) setSearch(q);
+    const bc = searchParams.get('barcode');
+    if (bc) {
+      setForm((f) => ({ ...f, barcode: bc, name: f.name || q || '' }));
+      setShowForm(true);
+    }
+    if (searchParams.get('new') === '1') setShowForm(true);
   }, [searchParams]);
 
   // Owners/managers always can manage products; staff need explicit permission
@@ -150,12 +165,14 @@ export function ProductsPage() {
         type: form.type || 'PRODUCT',
         initialStock: Math.max(0, Number.parseFloat(form.initialStock) || 0),
         isActive: true,
+        imageUrl: form.imageUrl.trim() || null,
       });
       return res.data;
     },
     onSuccess: async (res) => {
       const createdSku = res?.data?.sku;
       toast.success(createdSku ? `Product created · SKU ${createdSku}` : 'Product created');
+      completeOnboardingStep('product');
       setShowForm(false);
       setForm(emptyForm());
       await invalidateProductQueries();
@@ -177,6 +194,7 @@ export function ProductsPage() {
         barcode: editForm.barcode.trim() ? editForm.barcode.trim() : null,
         type: editForm.type || 'PRODUCT',
         isActive: Boolean(editForm.isActive),
+        imageUrl: editForm.imageUrl.trim() || null,
       };
       const res = await api.put(`/products/${editing.id}`, payload);
       return res.data as { data?: Product; message?: string };
@@ -247,7 +265,23 @@ export function ProductsPage() {
       type: p.type || 'PRODUCT',
       initialStock: '0',
       isActive: p.isActive !== false,
+      imageUrl: p.imageUrl || '',
     });
+  };
+
+  const uploadProductImage = async (file: File, target: 'create' | 'edit') => {
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await api.post('/uploads', fd);
+      const url = res.data?.data?.url as string | undefined;
+      if (!url) throw new Error('Upload failed');
+      if (target === 'create') setForm((f) => ({ ...f, imageUrl: url }));
+      else setEditForm((f) => ({ ...f, imageUrl: url }));
+      toast.success('Photo uploaded');
+    } catch (e) {
+      toast.error(getErrorMessage(e) || 'Photo upload failed');
+    }
   };
 
   const openCreate = () => {
@@ -430,6 +464,27 @@ export function ProductsPage() {
                       inputMode="decimal"
                       value={form.sellingPrice}
                       onChange={(e) => setForm({ ...form, sellingPrice: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="product-field">
+                  <label>Photo</label>
+                  <div className="flex items-center gap-2">
+                    {form.imageUrl ? (
+                      <img
+                        src={getMediaUrl(form.imageUrl) || ''}
+                        alt=""
+                        className="h-12 w-12 rounded-lg object-cover border border-border"
+                      />
+                    ) : null}
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      className="text-xs"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) void uploadProductImage(f, 'create');
+                      }}
                     />
                   </div>
                 </div>
@@ -725,7 +780,16 @@ export function ProductsPage() {
           <Card>
             <CardContent className="py-12 text-center text-muted-foreground">
               <Package className="mx-auto h-8 w-8 mb-2 opacity-40" />
-              <p className="text-sm">No products found</p>
+              <EmptyState
+                icon={Package}
+                title="No products yet"
+                description="Add your first item so POS and inventory have something to sell."
+                action={
+                  canCreate
+                    ? { label: 'Add product', onClick: () => openCreate() }
+                    : undefined
+                }
+              />
               {canCreate && (
                 <Button className="mt-3" onClick={openCreate}>
                   <Plus className="h-4 w-4" /> Add first product
@@ -739,12 +803,21 @@ export function ProductsPage() {
             <CardContent className="p-3 space-y-2.5">
               <div className="min-w-0">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-semibold text-sm leading-snug break-words">{p.name}</p>
-                    <p className="text-[11px] font-mono text-muted-foreground mt-0.5">
-                      {p.sku}
-                      {p.barcode ? ` · ${p.barcode}` : ''}
-                    </p>
+                  <div className="min-w-0 flex items-start gap-2">
+                    {p.imageUrl ? (
+                      <img
+                        src={getMediaUrl(p.imageUrl) || ''}
+                        alt=""
+                        className="h-11 w-11 rounded-lg object-cover border border-border shrink-0"
+                      />
+                    ) : null}
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm leading-snug break-words">{p.name}</p>
+                      <p className="text-[11px] font-mono text-muted-foreground mt-0.5">
+                        {p.sku}
+                        {p.barcode ? ` · ${p.barcode}` : ''}
+                      </p>
+                    </div>
                   </div>
                   <Badge variant={p.isActive ? 'success' : 'secondary'} className="shrink-0">
                     {p.isActive ? 'Active' : 'Off'}
@@ -769,8 +842,23 @@ export function ProductsPage() {
                   </div>
                 </div>
               </div>
-              {(canUpdate || canDelete) && (
-                <div className="flex gap-2">
+              <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    className="h-10 px-3"
+                    variant="secondary"
+                    onClick={() =>
+                      printProductLabel({
+                        name: p.name,
+                        price: p.sellingPrice,
+                        sku: p.sku,
+                        barcode: p.barcode,
+                        companyName,
+                      })
+                    }
+                  >
+                    <Tag className="h-4 w-4" /> Label
+                  </Button>
                   {canUpdate && (
                     <Button type="button" className="flex-1 h-10" variant="outline" onClick={() => openEdit(p)}>
                       <Pencil className="h-4 w-4" /> Edit
@@ -787,7 +875,6 @@ export function ProductsPage() {
                     </Button>
                   )}
                 </div>
-              )}
             </CardContent>
           </Card>
         ))}

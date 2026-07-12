@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { ArrowLeft, Coins, MapPin, RefreshCw } from 'lucide-react';
 import { api, getErrorMessage } from '@/lib/api';
 import { useCurrencyStore } from '@/stores/currencyStore';
+import { usePreferencesStore } from '@/stores/preferencesStore';
 import { refreshMoneyViews } from '@/lib/refreshApp';
 import { requestLocationCurrency } from '@/lib/localeCurrency';
 import { Button } from '@/components/ui/Button';
@@ -35,6 +36,7 @@ export function CurrencyPage() {
   const [locating, setLocating] = useState(false);
   const displayCurrency = useCurrencyStore((s) => s.displayCurrency);
   const locationCurrency = useCurrencyStore((s) => s.locationCurrency);
+  const completeOnboardingStep = usePreferencesStore((s) => s.completeOnboardingStep);
 
   const { data: currencyData, refetch, isFetching } = useQuery({
     queryKey: ['currencies'],
@@ -139,6 +141,7 @@ export function CurrencyPage() {
           : loc.source.startsWith('ip')
             ? 'network location'
             : 'device settings';
+      completeOnboardingStep('currency');
       toast.success(`Display currency: ${loc.currency}`, {
         description: loc.place ? `${loc.place} · ${via}` : `Detected via ${via}`,
       });

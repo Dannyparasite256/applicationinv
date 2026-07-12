@@ -34,7 +34,17 @@ export const createProductSchema = z.object({
   form: z.string().optional().nullable(),
   manufacturer: z.string().optional().nullable(),
   requiresPrescription: z.boolean().default(false),
-  imageUrl: z.string().url().optional().nullable(),
+  // Absolute https URL or local upload path `/uploads/...`
+  imageUrl: z
+    .union([
+      z.string().url(),
+      z.string().regex(/^\/uploads\//, 'Must be a URL or /uploads/ path'),
+      z.literal(''),
+      z.null(),
+    ])
+    .optional()
+    .nullable()
+    .transform((v) => (v === '' ? null : v)),
   warehouseId: z.string().uuid().optional(),
   initialStock: z.coerce.number().min(0).optional(),
 });

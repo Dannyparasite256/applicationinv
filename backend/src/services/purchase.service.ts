@@ -63,7 +63,9 @@ export async function createPurchase(
     supplierId: string;
     expectedDate?: Date | null;
     notes?: string | null;
-    items: Array<{
+    status?: 'DRAFT' | 'APPROVED' | 'ORDERED';
+    fromLowStock?: boolean;
+    items?: Array<{
       productId: string;
       quantity: number;
       unitCost: number;
@@ -78,26 +80,66 @@ export async function createPurchase(
   });
   if (!supplier) throw new NotFoundError('Supplier');
 
+  let lineItems = input.items || [];
+
+  if (input.fromLowStock && lineItems.length === 0) {
+    // Build lines from products at/below reorder level
+    const products = await prisma.product.findMany({
+      where: { companyId: cid, deletedAt: null, isActive: true, trackInventory: true },
+      include: {
+        stockLevels: { select: { quantity: true } },
+      },
+      take: 100,
+    });
+    lineItems = products
+      .map((p) => {
+        const qty = p.stockLevels.reduce((s, l) => s + Number(l.quantity || 0), 0);
+        const reorder = Number(p.reorderLevel || 0);
+        if (qty > reorder) return null;
+        const need = Math.max(Number(p.reorderQty || 0), reorder - qty, 1);
+        return {
+          productId: p.id,
+          quantity: need,
+          unitCost: Number(p.costPrice || 0),
+          batchNumber: null as string | null,
+          expiryDate: null as Date | null,
+        };
+      })
+      .filter(Boolean) as Array<{
+      productId: string;
+      quantity: number;
+      unitCost: number;
+      batchNumber?: string | null;
+      expiryDate?: Date | null;
+    }>;
+    if (!lineItems.length) {
+      throw new ValidationError('No low-stock products to order');
+    }
+  }
+
+  if (!lineItems.length) throw new ValidationError('Purchase needs at least one item');
+
   let subtotal = 0;
-  const items = input.items.map((item) => {
+  const items = lineItems.map((item) => {
     const total = item.quantity * item.unitCost;
     subtotal += total;
     return { ...item, taxAmount: 0, total };
   });
 
+  const status = input.status || 'APPROVED';
   const count = await prisma.purchaseOrder.count({ where: { companyId: cid } });
   return prisma.purchaseOrder.create({
     data: {
       companyId: cid,
       orderNo: generateDocNo('PO', count + 1),
       supplierId: input.supplierId,
-      status: 'APPROVED',
+      status,
       subtotal,
       taxAmount: 0,
       total: subtotal,
-      notes: input.notes,
+      notes: input.notes || (input.fromLowStock ? 'Auto draft from low-stock list' : null),
       expectedDate: input.expectedDate,
-      orderedAt: new Date(),
+      orderedAt: status === 'DRAFT' ? null : new Date(),
       createdBy: userId,
       items: {
         create: items.map((i) => ({

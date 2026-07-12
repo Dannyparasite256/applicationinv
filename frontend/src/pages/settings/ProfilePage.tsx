@@ -8,6 +8,7 @@ import { getMediaUrl, brandInitials } from '@/lib/media';
 import { refreshAppData } from '@/lib/refreshApp';
 import { useAuthStore } from '@/stores/authStore';
 import { useCurrencyStore } from '@/stores/currencyStore';
+import { usePreferencesStore } from '@/stores/preferencesStore';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
@@ -17,6 +18,7 @@ export function ProfilePage() {
   const qc = useQueryClient();
   const setUser = useAuthStore((s) => s.setUser);
   const authUser = useAuthStore((s) => s.user);
+  const completeOnboardingStep = usePreferencesStore((s) => s.completeOnboardingStep);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [profile, setProfile] = useState({
     name: '',
@@ -58,6 +60,7 @@ export function ProfilePage() {
     onSuccess: async (res) => {
       toast.success('Company profile saved — app updated');
       const c = res.data?.data;
+      if (c?.logoUrl) completeOnboardingStep('logo');
       if (authUser && c) {
         setUser({
           ...authUser,
@@ -120,6 +123,7 @@ export function ProfilePage() {
     onSuccess: async (res) => {
       const c = res.data?.data;
       toast.success('Business logo updated');
+      completeOnboardingStep('logo');
       setLogoPreview(getMediaUrl(c?.logoUrl));
       if (authUser && c) {
         setUser({

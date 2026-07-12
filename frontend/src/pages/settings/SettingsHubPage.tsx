@@ -11,11 +11,16 @@ import {
   Type,
   UserPlus,
   Users,
+  Volume2,
+  Vibrate,
+  Palette,
+  Type as TypeIcon,
 } from 'lucide-react';
 import { api, getErrorMessage } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { APP_FONTS } from '@/lib/fonts';
 import { useThemeStore } from '@/stores/themeStore';
+import { usePreferencesStore, type ThemePreset } from '@/stores/preferencesStore';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
@@ -59,6 +64,14 @@ export function SettingsHubPage() {
   const fontId = useThemeStore((s) => s.fontId);
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
+  const soundsEnabled = usePreferencesStore((s) => s.soundsEnabled);
+  const hapticsEnabled = usePreferencesStore((s) => s.hapticsEnabled);
+  const themePreset = usePreferencesStore((s) => s.themePreset);
+  const labelMode = usePreferencesStore((s) => s.labelMode);
+  const setSoundsEnabled = usePreferencesStore((s) => s.setSoundsEnabled);
+  const setHapticsEnabled = usePreferencesStore((s) => s.setHapticsEnabled);
+  const setThemePreset = usePreferencesStore((s) => s.setThemePreset);
+  const setLabelMode = usePreferencesStore((s) => s.setLabelMode);
   const currentFontLabel = APP_FONTS.find((f) => f.id === fontId)?.label || 'Phone system font';
   const [branchForm, setBranchForm] = useState({ code: '', name: '' });
 
@@ -97,6 +110,81 @@ export function SettingsHubPage() {
           Open a section below — each has its own full screen
         </p>
       </div>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Palette className="h-4 w-4 text-primary" /> Experience
+          </CardTitle>
+          <CardDescription>Sounds, haptics, look & cashier labels</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant={soundsEnabled ? 'default' : 'outline'}
+              onClick={() => setSoundsEnabled(!soundsEnabled)}
+            >
+              <Volume2 className="h-4 w-4" /> Sounds {soundsEnabled ? 'on' : 'off'}
+            </Button>
+            <Button
+              size="sm"
+              variant={hapticsEnabled ? 'default' : 'outline'}
+              onClick={() => setHapticsEnabled(!hapticsEnabled)}
+            >
+              <Vibrate className="h-4 w-4" /> Haptics {hapticsEnabled ? 'on' : 'off'}
+            </Button>
+            <Button
+              size="sm"
+              variant={labelMode === 'simple' ? 'default' : 'outline'}
+              onClick={() => setLabelMode(labelMode === 'simple' ? 'normal' : 'simple')}
+            >
+              <TypeIcon className="h-4 w-4" />{' '}
+              {labelMode === 'simple' ? 'Simple labels' : 'Normal labels'}
+            </Button>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground mb-1.5">Theme preset</p>
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  { id: 'clean', label: 'Clean' },
+                  { id: 'night', label: 'Night shift' },
+                  { id: 'contrast', label: 'High contrast' },
+                ] as Array<{ id: ThemePreset; label: string }>
+              ).map((p) => (
+                <Button
+                  key={p.id}
+                  size="sm"
+                  variant={themePreset === p.id ? 'default' : 'outline'}
+                  onClick={() => {
+                    setThemePreset(p.id);
+                    if (p.id === 'night') setTheme('dark');
+                  }}
+                >
+                  {p.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant={theme === 'light' ? 'default' : 'outline'}
+              onClick={() => setTheme('light')}
+            >
+              Light
+            </Button>
+            <Button
+              size="sm"
+              variant={theme === 'dark' ? 'default' : 'outline'}
+              onClick={() => setTheme('dark')}
+            >
+              Dark
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="pb-2">

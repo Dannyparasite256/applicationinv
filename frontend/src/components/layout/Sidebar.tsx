@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { filterNavForUser } from '@/lib/roleAccess';
 import { getMediaUrl, brandInitials } from '@/lib/media';
+import { tLabel } from '@/lib/i18nSimple';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 
@@ -210,7 +211,7 @@ export function Sidebar({ open, onToggle, mobile, onNavigate }: SidebarProps) {
             <item.icon className="shrink-0 h-[17px] w-[17px]" />
             {(open || mobile) && (
               <span className="flex-1 flex items-center justify-between gap-2 min-w-0">
-                <span className="truncate">{item.label}</span>
+                <span className="truncate">{tLabel(item.label)}</span>
                 {item.to === '/app/staff' && (pendingCount || 0) > 0 && (
                   <span className="rounded-full bg-warning text-warning-foreground text-[10px] px-1.5 py-0.5 font-bold shrink-0">
                     {pendingCount}

@@ -20,22 +20,29 @@ import {
   CloudOff,
   Camera,
   PackageSearch,
+  Star,
+  Clock,
+  DoorOpen,
 } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 import { api, getErrorMessage } from '@/lib/api';
 import { formatCurrency, parseMoneyToBase, displayCurrencyCode } from '@/lib/utils';
 import { usePosStore } from '@/stores/posStore';
 import { useNetworkStore } from '@/stores/networkStore';
 import { useCurrencyStore } from '@/stores/currencyStore';
 import { useAuthStore } from '@/stores/authStore';
+import { usePreferencesStore } from '@/stores/preferencesStore';
 import { canRefundOrDeleteSales } from '@/lib/roleAccess';
 import { getCachedProductByBarcode, getCachedProducts } from '@/lib/offline/db';
 import { queueOfflineSale, runSyncEngine, refreshOfflineCatalog } from '@/lib/offline/syncEngine';
 import { downloadPdf } from '@/lib/printShare';
 import { scanBarcode } from '@/native/barcodeScan';
+import { celebrateSuccess } from '@/lib/feedback';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { PrintShareDialog } from '@/components/shared/PrintShareDialog';
+import { SuccessBurst } from '@/components/shared/SuccessBurst';
 import { staggerItem } from '@/components/shared/PageTransition';
 
 interface Product {
@@ -53,11 +60,21 @@ interface Product {
 const SEARCH_MIN = 1;
 
 export function PosPage() {
+  const navigate = useNavigate();
   const scanRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [scanning, setScanning] = useState(false);
-  const [payMethod, setPayMethod] = useState<'CASH' | 'CARD' | 'MOBILE_MONEY'>('CASH');
+  const defaultPay = usePreferencesStore((s) => s.posDefaultPayment) as 'CASH' | 'CARD' | 'MOBILE_MONEY';
+  const setPosDefaultPayment = usePreferencesStore((s) => s.setPosDefaultPayment);
+  const favorites = usePreferencesStore((s) => s.posFavorites);
+  const recent = usePreferencesStore((s) => s.posRecent);
+  const toggleFavorite = usePreferencesStore((s) => s.toggleFavorite);
+  const pushRecent = usePreferencesStore((s) => s.pushRecent);
+  const completeOnboardingStep = usePreferencesStore((s) => s.completeOnboardingStep);
+  const [payMethod, setPayMethod] = useState<'CASH' | 'CARD' | 'MOBILE_MONEY'>(
+    defaultPay === 'CARD' || defaultPay === 'MOBILE_MONEY' ? defaultPay : 'CASH'
+  );
   const [tendered, setTendered] = useState('');
   const online = useNetworkStore((s) => s.online);
   const syncing = useNetworkStore((s) => s.syncing);
@@ -69,11 +86,16 @@ export function PosPage() {
   const [payCurrency, setPayCurrency] = useState(displayCurrency);
   const [lastSaleId, setLastSaleId] = useState<string | null>(null);
   const [lastSaleNo, setLastSaleNo] = useState<string | null>(null);
+  const [lastSaleTotal, setLastSaleTotal] = useState<number | null>(null);
+  const [showSuccess, setShowSuccess] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [autoPrint, setAutoPrint] = useState(false);
   const [customerId, setCustomerIdLocal] = useState<string>('');
   const [applyDiscount, setApplyDiscount] = useState(false);
   const [discountInput, setDiscountInput] = useState('');
+  const [closingCash, setClosingCash] = useState('');
+  const [shiftNotes, setShiftNotes] = useState('');
+  const [showCloseShift, setShowCloseShift] = useState(false);
   const qc = useQueryClient();
 
   // Debounce search so we don't spam the API on every keystroke
@@ -331,18 +353,25 @@ export function PosPage() {
     },
     onSuccess: (result) => {
       if (result.offline) {
-        toast.success('Sale saved offline — will sync when online');
+        void celebrateSuccess('Sale saved offline', 'Will sync when you’re back online');
         clearCart();
         setTendered('');
         setQuery('');
         setApplyDiscount(false);
         setDiscountInput('');
         setDiscount(0);
+        setShowSuccess(true);
+        setLastSaleTotal(totals.total);
       } else {
         const sale = result.data;
-        toast.success(sale?.saleNo ? `Sale ${sale.saleNo} recorded` : 'Sale recorded successfully');
+        void celebrateSuccess(
+          sale?.saleNo ? `Sale ${sale.saleNo} complete` : 'Sale recorded',
+          formatCurrency(Number(sale?.total ?? totals.total))
+        );
         setLastSaleId(sale?.id || null);
         setLastSaleNo(sale?.saleNo || null);
+        setLastSaleTotal(Number(sale?.total ?? totals.total));
+        setShowSuccess(true);
         clearCart();
         setTendered('');
         setCustomerIdLocal('');
@@ -351,12 +380,63 @@ export function PosPage() {
         setApplyDiscount(false);
         setDiscountInput('');
         setDiscount(0);
-        // Receipt is optional — open only when user taps Print/Share
+        completeOnboardingStep('sale');
       }
+      setPosDefaultPayment(payMethod);
       refreshEverywhereAfterSaleChange();
       scanRef.current?.focus();
     },
     onError: (e) => toast.error(getErrorMessage(e) || 'Could not record sale'),
+  });
+
+  const closeShift = useMutation({
+    mutationFn: async () => {
+      if (!shift?.id) throw new Error('No open shift');
+      const cash = parseFloat(closingCash);
+      if (!Number.isFinite(cash) || cash < 0) throw new Error('Enter closing cash amount');
+      return (
+        await api.post(`/sales/shifts/${shift.id}/close`, {
+          closingCash: cash,
+          notes: shiftNotes || undefined,
+        })
+      ).data.data as {
+        openingCash?: number;
+        closingCash?: number;
+        expectedCash?: number;
+        difference?: number;
+      };
+    },
+    onSuccess: (data) => {
+      const exp = data?.expectedCash != null ? formatCurrency(Number(data.expectedCash)) : null;
+      const diff =
+        data?.difference != null ? formatCurrency(Number(data.difference)) : null;
+      toast.success('Shift closed', {
+        description: [exp ? `Expected ${exp}` : null, diff ? `Difference ${diff}` : null]
+          .filter(Boolean)
+          .join(' · ') || undefined,
+      });
+      setShowCloseShift(false);
+      setClosingCash('');
+      setShiftNotes('');
+      void qc.invalidateQueries({ queryKey: ['current-shift'] });
+    },
+    onError: (e) => toast.error(getErrorMessage(e)),
+  });
+
+  const favoriteIds = favorites;
+  const recentIds = recent.map((r) => r.id);
+  const pinIds = [...new Set([...favoriteIds, ...recentIds])].slice(0, 16);
+  const { data: pinnedProducts } = useQuery({
+    queryKey: ['pos-pinned', pinIds.join(',')],
+    enabled: pinIds.length > 0 && !debouncedQuery.trim(),
+    staleTime: 60_000,
+    queryFn: async () => {
+      // Load from catalog cache / search by fetching products list and filtering
+      const res = await api.get('/products', { params: { limit: 100 } });
+      const list = (res.data?.data || []) as Product[];
+      const map = new Map(list.map((p) => [p.id, p]));
+      return pinIds.map((id) => map.get(id)).filter(Boolean) as Product[];
+    },
   });
 
   const syncOffline = useMutation({
@@ -416,6 +496,7 @@ export function PosPage() {
       trackInventory: p.trackInventory,
       stockQty: stock,
     });
+    pushRecent(p.id);
     toast.message(`Added ${p.name}`);
   };
 
@@ -512,7 +593,19 @@ export function PosPage() {
               )}
               {queued > 0 && <Badge variant="secondary" className="text-[10px]">{queued}</Badge>}
               {shift ? (
-                <Badge variant="success" className="text-[10px] truncate max-w-[6rem]">Shift</Badge>
+                <>
+                  <Badge variant="success" className="text-[10px] truncate max-w-[6rem]">
+                    Shift open
+                  </Badge>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs px-2"
+                    onClick={() => setShowCloseShift((v) => !v)}
+                  >
+                    <DoorOpen className="h-3.5 w-3.5" /> Close
+                  </Button>
+                </>
               ) : online ? (
                 <Button size="sm" className="h-7 text-xs px-2" onClick={() => openShift.mutate()} loading={openShift.isPending}>
                   Open Shift
@@ -536,8 +629,80 @@ export function PosPage() {
             </div>
           </div>
 
+          {showCloseShift && shift && (
+            <div className="rounded-xl border border-border bg-card p-3 space-y-2">
+              <p className="text-xs font-semibold">Close shift</p>
+              <Input
+                type="number"
+                placeholder="Closing cash counted"
+                value={closingCash}
+                onChange={(e) => setClosingCash(e.target.value)}
+              />
+              <Input
+                placeholder="Notes (optional)"
+                value={shiftNotes}
+                onChange={(e) => setShiftNotes(e.target.value)}
+              />
+              <div className="flex gap-2">
+                <Button size="sm" loading={closeShift.isPending} onClick={() => closeShift.mutate()}>
+                  Confirm close
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setShowCloseShift(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <SuccessBurst
+            open={showSuccess && !!(lastSaleId || lastSaleTotal != null)}
+            title={lastSaleNo ? `Sale ${lastSaleNo} complete` : 'Sale complete'}
+            subtitle={
+              lastSaleTotal != null
+                ? `Total ${formatCurrency(lastSaleTotal)}${customerId ? ' · customer saved on ticket' : ''}`
+                : undefined
+            }
+            onClose={() => setShowSuccess(false)}
+            actions={[
+              {
+                label: 'New sale',
+                onClick: () => {
+                  setShowSuccess(false);
+                  scanRef.current?.focus();
+                },
+              },
+              ...(lastSaleId
+                ? [
+                    {
+                      label: 'Print',
+                      variant: 'outline' as const,
+                      onClick: () => openLastReceipt(true),
+                    },
+                    {
+                      label: 'Share',
+                      variant: 'secondary' as const,
+                      onClick: () => openLastReceipt(false),
+                    },
+                    {
+                      label: 'PDF',
+                      variant: 'secondary' as const,
+                      onClick: () =>
+                        downloadPdf('receipt', lastSaleId, {
+                          format: 'thermal80',
+                          filename: `${lastSaleNo || 'receipt'}.pdf`,
+                        })
+                          .then(() => toast.success('Receipt PDF ready'))
+                          .catch((e) =>
+                            toast.error(e instanceof Error ? e.message : 'PDF failed')
+                          ),
+                    },
+                  ]
+                : []),
+            ]}
+          />
+
           <AnimatePresence>
-            {lastSaleId && (
+            {lastSaleId && !showSuccess && (
               <motion.div
                 initial={{ opacity: 0, y: -8 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -632,14 +797,55 @@ export function PosPage() {
           variants={{ show: { transition: { staggerChildren: 0.03 } } }}
         >
           {!canSearch && (
-            <div className="col-span-full flex flex-col items-center justify-center text-center py-16 px-4 text-muted-foreground gap-3">
-              <PackageSearch className="h-10 w-10 opacity-40" />
-              <div>
-                <p className="font-medium text-foreground">Search for products</p>
-                <p className="text-sm mt-1 max-w-sm">
-                  Type a product name, SKU, or barcode — results appear here. Nothing is listed until you
-                  search.
-                </p>
+            <div className="col-span-full space-y-3 py-4">
+              {(pinnedProducts?.length || 0) > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1 px-1">
+                    <Star className="h-3 w-3 text-primary" /> Favorites & recent
+                  </p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-1.5 sm:gap-2">
+                    {pinnedProducts!.map((p) => (
+                      <div key={p.id} className="relative">
+                        <button
+                          type="button"
+                          onClick={() => addProduct(p)}
+                          className="w-full rounded-lg sm:rounded-xl border border-border bg-card p-2 sm:p-3 text-left hover:border-primary hover:shadow-md transition-colors"
+                        >
+                          <p className="font-medium text-xs sm:text-sm line-clamp-2">{p.name}</p>
+                          <p className="mt-2 font-bold text-primary text-sm">
+                            {formatCurrency(Number(p.sellingPrice))}
+                          </p>
+                        </button>
+                        <button
+                          type="button"
+                          className="absolute top-1.5 right-1.5 p-1 rounded-md bg-background/80"
+                          aria-label="Toggle favorite"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleFavorite(p.id);
+                          }}
+                        >
+                          <Star
+                            className={`h-3.5 w-3.5 ${
+                              favoriteIds.includes(p.id)
+                                ? 'fill-primary text-primary'
+                                : 'text-muted-foreground'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="flex flex-col items-center justify-center text-center py-8 px-4 text-muted-foreground gap-3">
+                <PackageSearch className="h-10 w-10 opacity-40" />
+                <div>
+                  <p className="font-medium text-foreground">Search for products</p>
+                  <p className="text-sm mt-1 max-w-sm">
+                    Type a name, SKU, or barcode. Star items to pin them here for faster checkout.
+                  </p>
+                </div>
               </div>
             </div>
           )}
@@ -654,33 +860,60 @@ export function PosPage() {
           {canSearch &&
             !searchingProducts &&
             (products || []).map((p) => (
-              <motion.button
+              <motion.div
                 key={p.id}
                 variants={staggerItem}
-                whileHover={{ y: -2, scale: 1.01 }}
-                whileTap={{ scale: 0.97 }}
-                onClick={() => addProduct(p)}
-                className="rounded-lg sm:rounded-xl border border-border bg-card p-2 sm:p-3 text-left hover:border-primary hover:shadow-md transition-colors shadow-sm min-w-0"
+                className="relative rounded-lg sm:rounded-xl border border-border bg-card shadow-sm min-w-0"
               >
-                <p className="font-medium text-xs sm:text-sm line-clamp-2 min-h-[2.25rem] break-safe">{p.name}</p>
-                <p className="text-[10px] sm:text-xs text-muted-foreground font-mono mt-0.5 truncate">{p.sku}</p>
-                {p.barcode && (
-                  <p className="text-[10px] text-muted-foreground font-mono truncate">{p.barcode}</p>
-                )}
-                <div className="mt-2 flex items-center justify-between">
-                  <span className="font-bold text-primary">
-                    {formatCurrency(Number(p.sellingPrice))}
-                  </span>
-                  {p.trackInventory && (
-                    <span className="text-xs text-muted-foreground">Qty {p.stockQty ?? 0}</span>
-                  )}
-                </div>
-              </motion.button>
+                <button
+                  type="button"
+                  onClick={() => addProduct(p)}
+                  className="w-full p-2 sm:p-3 text-left hover:border-primary"
+                >
+                  <p className="font-medium text-xs sm:text-sm line-clamp-2 min-h-[2.25rem] break-safe pr-6">
+                    {p.name}
+                  </p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground font-mono mt-0.5 truncate">
+                    {p.sku}
+                  </p>
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="font-bold text-primary">
+                      {formatCurrency(Number(p.sellingPrice))}
+                    </span>
+                    {p.trackInventory && (
+                      <span className="text-xs text-muted-foreground">Qty {p.stockQty ?? 0}</span>
+                    )}
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  className="absolute top-1.5 right-1.5 p-1 rounded-md hover:bg-muted"
+                  onClick={() => toggleFavorite(p.id)}
+                  aria-label="Favorite"
+                >
+                  <Star
+                    className={`h-3.5 w-3.5 ${
+                      favoriteIds.includes(p.id) ? 'fill-primary text-primary' : 'text-muted-foreground'
+                    }`}
+                  />
+                </button>
+              </motion.div>
             ))}
           {canSearch && !searchingProducts && !searchError && !products?.length && (
-            <p className="col-span-full text-center text-sm text-muted-foreground py-16">
-              No products match “{searchTerm}”
-            </p>
+            <div className="col-span-full text-center py-10 space-y-3">
+              <p className="text-sm text-muted-foreground">No products match “{searchTerm}”</p>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() =>
+                  navigate(
+                    `/app/products?new=1&barcode=${encodeURIComponent(searchTerm)}&q=${encodeURIComponent(searchTerm)}`
+                  )
+                }
+              >
+                Create product with this code
+              </Button>
+            </div>
           )}
         </motion.div>
       </div>

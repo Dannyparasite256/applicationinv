@@ -4,6 +4,10 @@ export const createPurchaseSchema = z.object({
   supplierId: z.string().uuid(),
   expectedDate: z.coerce.date().optional().nullable(),
   notes: z.string().optional().nullable(),
+  /** Default APPROVED for existing clients; DRAFT for reorder workflow */
+  status: z.enum(['DRAFT', 'APPROVED', 'ORDERED']).optional(),
+  /** When true and items empty, server fills lines from low-stock products */
+  fromLowStock: z.boolean().optional().default(false),
   items: z
     .array(
       z.object({
@@ -14,7 +18,11 @@ export const createPurchaseSchema = z.object({
         expiryDate: z.coerce.date().optional().nullable(),
       })
     )
-    .min(1),
+    .optional()
+    .default([]),
+}).refine((d) => d.fromLowStock || (d.items && d.items.length > 0), {
+  message: 'Add items or set fromLowStock',
+  path: ['items'],
 });
 
 export const receivePurchaseSchema = z.object({

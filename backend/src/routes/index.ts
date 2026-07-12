@@ -10,7 +10,7 @@ import * as customerController from '../controllers/customer.controller';
 import * as purchaseController from '../controllers/purchase.controller';
 import * as hospitalController from '../controllers/hospital.controller';
 import * as companyController from '../controllers/company.controller';
-import { authenticate, requireTenant, requirePermissions } from '../middleware/auth';
+import { authenticate, requireTenant, requirePermissions, requireAnyPermission } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { createCustomerSchema, createSupplierSchema, createPatientSchema } from '../validators/customer.validator';
 import { createPurchaseSchema, receivePurchaseSchema } from '../validators/purchase.validator';
@@ -86,6 +86,13 @@ router.get('/branches', authenticate, requireTenant, companyController.listBranc
 router.get('/warehouses', authenticate, requireTenant, companyController.listWarehouses);
 router.get('/accounts', authenticate, requireTenant, requirePermissions('accounting.read'), companyController.listAccounts);
 router.get('/employees', authenticate, requireTenant, requirePermissions('hr.employees.read'), companyController.listEmployees);
+router.get(
+  '/activity',
+  authenticate,
+  requireTenant,
+  requireAnyPermission('reports.read', 'settings.company', 'dashboard.read', 'sales.read'),
+  companyController.listActivity
+);
 router.get('/notifications', authenticate, companyController.listNotifications);
 router.patch('/notifications/:id/read', authenticate, companyController.markNotificationRead);
 router.post('/notifications/device', authenticate, companyController.registerDevice);

@@ -32,6 +32,19 @@ if (!document.documentElement.dataset.font) {
   document.documentElement.dataset.font = 'system';
 }
 
+// Theme preset (clean / night / contrast)
+try {
+  const prefs = localStorage.getItem('eims-prefs');
+  if (prefs) {
+    const parsed = JSON.parse(prefs);
+    const preset = parsed?.state?.themePreset || 'clean';
+    document.documentElement.classList.add(`theme-${preset}`);
+    if (preset === 'night') document.documentElement.classList.add('dark');
+  }
+} catch {
+  /* ignore */
+}
+
 /** Ping the API so free-tier hosts (Render) wake before the first real request. */
 async function warmApi(): Promise<void> {
   try {

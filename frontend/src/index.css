@@ -52,6 +52,24 @@
     --ring: 239 84% 67%;
   }
 
+  /* Theme presets (preferences store) */
+  .theme-night {
+    --background: 230 35% 5%;
+    --card: 230 30% 8%;
+    --muted: 230 25% 12%;
+    --border: 230 20% 14%;
+  }
+  .theme-contrast {
+    --border: 220 15% 55%;
+    --muted-foreground: 220 12% 28%;
+    --ring: 239 90% 45%;
+  }
+  .dark.theme-contrast {
+    --border: 220 20% 55%;
+    --muted-foreground: 210 20% 85%;
+    --foreground: 0 0% 100%;
+  }
+
   * {
     @apply border-border;
     box-sizing: border-box;

@@ -675,6 +675,7 @@ export function InventoryPage() {
   const [adjProduct, setAdjProduct] = useState('');
   const [adjQty, setAdjQty] = useState('0');
   const [adjReason, setAdjReason] = useState('Stock count');
+  const [supplierId, setSupplierId] = useState('');
 
   const { data: low } = useQuery({
     queryKey: ['low-stock'],
@@ -695,6 +696,10 @@ export function InventoryPage() {
   const { data: products } = useQuery({
     queryKey: ['products-mini'],
     queryFn: async () => (await api.get('/products', { params: { limit: 100 } })).data,
+  });
+  const { data: suppliers } = useQuery({
+    queryKey: ['suppliers'],
+    queryFn: async () => (await api.get('/suppliers', { params: { limit: 50 } })).data,
   });
 
   const adjust = useMutation({
@@ -723,6 +728,25 @@ export function InventoryPage() {
     onError: (e) => toast.error(getErrorMessage(e)),
   });
 
+  const draftFromLowStock = useMutation({
+    mutationFn: async () => {
+      if (!supplierId) throw new Error('Select a supplier for the reorder draft');
+      return api.post('/purchases', {
+        supplierId,
+        status: 'DRAFT',
+        fromLowStock: true,
+        notes: 'Draft from low-stock list',
+        items: [],
+      });
+    },
+    onSuccess: (res) => {
+      const po = res.data?.data;
+      toast.success(po?.orderNo ? `Draft ${po.orderNo} created` : 'Purchase draft created');
+      qc.invalidateQueries({ queryKey: ['purchases'] });
+    },
+    onError: (e) => toast.error(getErrorMessage(e)),
+  });
+
   return (
     <PageShell title="Inventory" description="Stock levels, adjustments, movements & alerts">
       <div className="grid gap-4 lg:grid-cols-2">
@@ -747,23 +771,54 @@ export function InventoryPage() {
             </Button>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Low stock alerts</CardTitle>
+        <Card id="low-stock">
+          <CardHeader className="flex flex-row items-start justify-between gap-2">
+            <div>
+              <CardTitle className="text-base">Low stock alerts</CardTitle>
+              <CardDescription>Create a purchase draft to restock</CardDescription>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-2 max-h-64 overflow-y-auto">
-            {(low || []).map((p: { id: string; name: string; sku: string; stockQty: number; reorderLevel: number }) => (
-              <div key={p.id} className="flex justify-between text-sm border-b border-border/50 pb-2">
-                <div>
-                  <p className="font-medium">{p.name}</p>
-                  <p className="text-xs text-muted-foreground">{p.sku}</p>
-                </div>
-                <Badge variant="destructive">
-                  {p.stockQty} / {p.reorderLevel}
-                </Badge>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap gap-2 items-end">
+              <div className="flex-1 min-w-[10rem]">
+                <label className="text-xs text-muted-foreground">Supplier</label>
+                <select
+                  className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
+                  value={supplierId}
+                  onChange={(e) => setSupplierId(e.target.value)}
+                >
+                  <option value="">Select supplier</option>
+                  {((suppliers?.data || []) as Array<{ id: string; name: string }>).map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
               </div>
-            ))}
-            {!low?.length && <p className="text-sm text-muted-foreground">All stock healthy</p>}
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={!low?.length}
+                loading={draftFromLowStock.isPending}
+                onClick={() => draftFromLowStock.mutate()}
+              >
+                Create reorder draft
+              </Button>
+            </div>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {(low || []).map((p: { id: string; name: string; sku: string; stockQty: number; reorderLevel: number }) => (
+                <div key={p.id} className="flex justify-between text-sm border-b border-border/50 pb-2">
+                  <div>
+                    <p className="font-medium">{p.name}</p>
+                    <p className="text-xs text-muted-foreground">{p.sku}</p>
+                  </div>
+                  <Badge variant="destructive">
+                    {p.stockQty} / {p.reorderLevel}
+                  </Badge>
+                </div>
+              ))}
+              {!low?.length && <p className="text-sm text-muted-foreground">All stock healthy</p>}
+            </div>
           </CardContent>
         </Card>
       </div>

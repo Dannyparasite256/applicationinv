@@ -129,7 +129,7 @@ export function getErrorMessage(error: unknown): string {
       const code = error.code || '';
       if (code === 'ECONNABORTED' || error.message.toLowerCase().includes('timeout')) {
         return isNativeApp()
-          ? 'Request timed out. Check your connection and try again.'
+          ? 'Request timed out. Check your internet and try again.'
           : 'Server is slow to respond (it may be waking up). Wait a moment and retry.';
       }
       if (
@@ -139,11 +139,23 @@ export function getErrorMessage(error: unknown): string {
         return unreachableMessage();
       }
     }
+    const status = error.response?.status;
+    if (status === 401) return 'Please sign in again — your session expired.';
+    if (status === 403) return 'You don’t have permission to do that.';
+    if (status === 404) return 'We couldn’t find that item. It may have been removed.';
+    if (status === 429) return 'Too many requests. Wait a few seconds and try again.';
+    if (status && status >= 500) {
+      return 'Something went wrong on the server. Try again in a minute.';
+    }
     const data = error.response?.data as {
       message?: string;
       details?: Array<{ path?: string; message?: string }>;
     } | undefined;
     const base = data?.message || error.message || 'Request failed';
+    // Prefer plain language over raw codes
+    if (/prisma|econnrefused|internal server/i.test(base)) {
+      return 'Something went wrong on the server. Try again in a minute.';
+    }
     if (data?.details?.length) {
       const first = data.details[0];
       const detail = first.message || '';
@@ -153,7 +165,7 @@ export function getErrorMessage(error: unknown): string {
     return base;
   }
   if (error instanceof Error) return error.message;
-  return 'Something went wrong';
+  return 'Something went wrong. Please try again.';
 }
 
 export interface ApiResponse<T> {

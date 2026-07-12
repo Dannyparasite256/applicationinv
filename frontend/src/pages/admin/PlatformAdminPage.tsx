@@ -147,6 +147,41 @@ export function PlatformAdminPage() {
         <ChevronRight className="h-5 w-5 text-primary shrink-0" />
       </Link>
 
+      {/* Health / attention board */}
+      <Card className="border-warning/30 bg-warning/5">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Needs attention</CardTitle>
+          <CardDescription>Businesses that may need support</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-2 sm:grid-cols-3">
+          <div className="rounded-xl border border-border bg-card p-3">
+            <p className="text-xs text-muted-foreground">Suspended</p>
+            <p className="text-xl font-bold tabular-nums text-destructive">
+              {formatNumber(kpis?.suspendedCompanies || 0)}
+            </p>
+            <Link to="/app/platform/businesses" className="text-[11px] text-primary font-medium">
+              Open directory →
+            </Link>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-3">
+            <p className="text-xs text-muted-foreground">On trial</p>
+            <p className="text-xl font-bold tabular-nums text-warning">
+              {formatNumber(kpis?.trialCompanies || 0)}
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              {formatNumber(kpis?.newThisWeek || 0)} new this week
+            </p>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-3">
+            <p className="text-xs text-muted-foreground">Support tip</p>
+            <p className="text-xs mt-1 text-muted-foreground leading-relaxed">
+              Open a business → reset passwords, change status, review audit trail. No silent
+              login-as; use credentials tools only.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 2xl:grid-cols-6 min-w-0">
         {kpiCards.map((card) => (
           <div key={card.label} className="kpi-card">

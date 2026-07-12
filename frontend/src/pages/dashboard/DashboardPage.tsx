@@ -23,12 +23,18 @@ import {
   Wallet,
   Shield,
   Building2,
+  Sparkles,
+  Activity,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatCurrency, formatNumber } from '@/lib/utils';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { useAuthStore } from '@/stores/authStore';
+import { useNetworkStore } from '@/stores/networkStore';
+import { OnboardingChecklist } from '@/components/shared/OnboardingChecklist';
+import { SkeletonKpiGrid } from '@/components/shared/Skeleton';
+import { EmptyState } from '@/components/shared/EmptyState';
 
 interface DashboardData {
   kpis: {
@@ -59,9 +65,17 @@ interface DashboardData {
   }>;
 }
 
+function greetingForNow(name?: string) {
+  const h = new Date().getHours();
+  const part = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+  return name ? `${part}, ${name}` : part;
+}
+
 export function DashboardPage() {
-  const roles = useAuthStore((s) => s.user?.roles || []);
+  const user = useAuthStore((s) => s.user);
+  const roles = user?.roles || [];
   const isSuperAdmin = roles.includes('SUPER_ADMIN');
+  const pendingCount = useNetworkStore((s) => s.pendingCount);
 
   const { data: platformKpis } = useQuery({
     queryKey: ['platform-overview-mini'],
@@ -100,29 +114,80 @@ export function DashboardPage() {
 
   const kpis = data?.kpis;
 
+  const { data: activity } = useQuery({
+    queryKey: ['tenant-activity'],
+    enabled: !isSuperAdmin,
+    queryFn: async () =>
+      (
+        await api.get('/activity', { params: { limit: 8 } })
+      ).data.data as Array<{
+        id: string;
+        action: string;
+        module: string;
+        createdAt: string;
+        user?: { firstName?: string; lastName?: string; email?: string } | null;
+      }>,
+    staleTime: 30_000,
+    retry: 1,
+  });
+
   const cards = [
-    { label: 'Sales Today', value: formatCurrency(kpis?.salesToday || 0), sub: `${kpis?.salesTodayCount || 0} orders`, icon: DollarSign, color: 'text-primary' },
+    { label: 'Sales Today', value: formatCurrency(kpis?.salesToday || 0), sub: `${kpis?.salesTodayCount || 0} orders`, icon: DollarSign, color: 'text-primary', to: '/app/sales' },
     { label: 'Weekly Sales', value: formatCurrency(kpis?.salesWeek || 0), sub: 'This week', icon: TrendingUp, color: 'text-accent' },
     { label: 'Monthly Revenue', value: formatCurrency(kpis?.salesMonth || 0), sub: `${kpis?.salesMonthCount || 0} sales`, icon: Wallet, color: 'text-success' },
-    { label: 'Inventory Value', value: formatCurrency(kpis?.inventoryValue || 0), sub: `${kpis?.products || 0} products`, icon: Package, color: 'text-warning' },
-    { label: 'Low Stock', value: formatNumber(kpis?.lowStock || 0), sub: 'Items below reorder', icon: AlertTriangle, color: 'text-destructive' },
-    { label: 'Purchases (MTD)', value: formatCurrency(kpis?.purchasesMonth || 0), sub: `${kpis?.pendingOrders || 0} pending`, icon: Truck, color: 'text-primary' },
-    { label: 'Customers', value: formatNumber(kpis?.customers || 0), sub: 'Active', icon: Users, color: 'text-accent' },
+    { label: 'Inventory Value', value: formatCurrency(kpis?.inventoryValue || 0), sub: `${kpis?.products || 0} products`, icon: Package, color: 'text-warning', to: '/app/products' },
+    { label: 'Low Stock', value: formatNumber(kpis?.lowStock || 0), sub: 'Items below reorder', icon: AlertTriangle, color: 'text-destructive', to: '/app/inventory#low-stock' },
+    { label: 'Purchases (MTD)', value: formatCurrency(kpis?.purchasesMonth || 0), sub: `${kpis?.pendingOrders || 0} pending`, icon: Truck, color: 'text-primary', to: '/app/purchases' },
+    { label: 'Customers', value: formatNumber(kpis?.customers || 0), sub: 'Active', icon: Users, color: 'text-accent', to: '/app/customers' },
     { label: 'Est. Profit', value: formatCurrency(kpis?.profit || 0), sub: 'Monthly estimate', icon: ShoppingBag, color: 'text-success' },
   ];
+
+  const topName = data?.topProducts?.[0]?.name;
+  const story =
+    (kpis?.salesTodayCount || 0) > 0
+      ? `Today: ${kpis?.salesTodayCount} sale(s) for ${formatCurrency(kpis?.salesToday || 0)}${topName ? ` · Top item: ${topName}` : ''}.`
+      : topName
+        ? `This period’s standout product is ${topName}. Open POS when you’re ready for the next sale.`
+        : 'No sales yet today — open POS to ring up your first order.';
+
+  const snapshotParts = [
+    `${kpis?.salesTodayCount || 0} sales today`,
+    formatCurrency(kpis?.salesToday || 0),
+    kpis?.lowStock ? `${kpis.lowStock} low stock` : null,
+    pendingCount ? `${pendingCount} offline pending` : null,
+  ].filter(Boolean);
 
   return (
     <div className="page-container">
       <div className="page-header">
         <div className="min-w-0">
-          <p className="section-label mb-0.5">Overview</p>
-          <h1 className="page-title">Dashboard</h1>
-          <p className="page-subtitle">Sales, stock & customers at a glance</p>
+          <p className="section-label mb-0.5">{user?.company?.name || 'Overview'}</p>
+          <h1 className="page-title truncate">{greetingForNow(user?.firstName)}</h1>
+          <p className="page-subtitle">
+            {new Date().toLocaleDateString(undefined, {
+              weekday: 'long',
+              month: 'short',
+              day: 'numeric',
+            })}
+            {snapshotParts.length ? ` · ${snapshotParts.join(' · ')}` : ''}
+          </p>
         </div>
         <Badge variant="secondary" className="h-7 rounded-full px-2.5 text-[11px] font-medium shrink-0">
           {isFetching ? 'Refreshing…' : navigator.onLine ? 'Live' : 'Offline'}
         </Badge>
       </div>
+
+      <OnboardingChecklist />
+
+      <Card className="border-primary/15 bg-gradient-to-r from-primary/5 via-card to-accent/5">
+        <CardContent className="pt-3 pb-3 flex items-start gap-2.5">
+          <Sparkles className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-primary">Business pulse</p>
+            <p className="text-sm text-muted-foreground mt-0.5">{story}</p>
+          </div>
+        </CardContent>
+      </Card>
 
       {isSuperAdmin && (
         <Card className="border-primary/30 bg-primary/5">
@@ -161,32 +226,84 @@ export function DashboardPage() {
         </Card>
       )}
 
-      <div className="grid gap-2 sm:gap-2.5 grid-cols-2 xl:grid-cols-4 min-w-0">
-        {cards.map((card, i) => (
-          <motion.div
-            key={card.label}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.03, type: 'spring', stiffness: 320, damping: 28 }}
-            className="kpi-card"
-          >
-            <div className="flex items-start justify-between relative z-[1] gap-1.5">
-              <div className="min-w-0 flex-1">
-                <p className="text-[10px] sm:text-xs font-medium text-muted-foreground truncate">{card.label}</p>
-                <p className="mt-0.5 text-sm sm:text-lg font-bold tabular-nums tracking-tight font-display truncate">
-                  {isLoading ? '—' : card.value}
-                </p>
-                <p className="mt-0.5 text-[10px] sm:text-xs text-muted-foreground truncate">{card.sub}</p>
+      {isLoading ? (
+        <SkeletonKpiGrid count={8} />
+      ) : (
+        <div className="grid gap-2 sm:gap-2.5 grid-cols-2 xl:grid-cols-4 min-w-0">
+          {cards.map((card, i) => {
+            const inner = (
+              <div className="flex items-start justify-between relative z-[1] gap-1.5">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] sm:text-xs font-medium text-muted-foreground truncate">
+                    {card.label}
+                  </p>
+                  <p className="mt-0.5 text-sm sm:text-lg font-bold tabular-nums tracking-tight font-display truncate">
+                    {card.value}
+                  </p>
+                  <p className="mt-0.5 text-[10px] sm:text-xs text-muted-foreground truncate">{card.sub}</p>
+                </div>
+                <div
+                  className={`rounded-lg sm:rounded-xl bg-gradient-to-br from-muted to-muted/40 p-1.5 sm:p-2 ring-1 ring-border/60 shrink-0 ${card.color}`}
+                >
+                  <card.icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                </div>
               </div>
-              <div
-                className={`rounded-lg sm:rounded-xl bg-gradient-to-br from-muted to-muted/40 p-1.5 sm:p-2 ring-1 ring-border/60 shrink-0 ${card.color}`}
+            );
+            return (
+              <motion.div
+                key={card.label}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.03, type: 'spring', stiffness: 320, damping: 28 }}
+                className="kpi-card"
               >
-                <card.icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                {'to' in card && card.to ? (
+                  <Link to={card.to as string} className="block min-w-0">
+                    {inner}
+                  </Link>
+                ) : (
+                  inner
+                )}
+              </motion.div>
+            );
+          })}
+        </div>
+      )}
+
+      {!isSuperAdmin && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Activity className="h-4 w-4 text-primary" /> What changed
+            </CardTitle>
+            <CardDescription>Recent activity in your business</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {(activity || []).slice(0, 6).map((log) => (
+              <div key={log.id} className="text-xs border-b border-border/50 pb-2 last:border-0">
+                <p className="font-medium">
+                  {log.action}{' '}
+                  <span className="text-muted-foreground font-normal">· {log.module}</span>
+                </p>
+                <p className="text-muted-foreground">
+                  {log.user
+                    ? `${log.user.firstName || ''} ${log.user.lastName || ''}`.trim() ||
+                      log.user.email
+                    : 'System'}{' '}
+                  · {new Date(log.createdAt).toLocaleString()}
+                </p>
               </div>
-            </div>
-          </motion.div>
-        ))}
-      </div>
+            ))}
+            {!activity?.length && (
+              <EmptyState
+                icon={Activity}
+                title="No activity yet"
+                description="Sales, stock changes, and staff actions will show up here."
+              />
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-2.5 sm:gap-3 lg:grid-cols-3 min-w-0">
         <Card className="lg:col-span-2 fit-x">
