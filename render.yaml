@@ -69,7 +69,7 @@ services:
       - key: APP_URL
         value: https://eims-web.onrender.com
       - key: API_URL
-        value: https://eims-api.onrender.com
+        value: https://eims-api-qe86.onrender.com
       - key: DEFAULT_TENANT_SLUG
         value: demo
       - key: RATE_LIMIT_MAX
@@ -94,4 +94,4 @@ services:
       - key: NODE_VERSION
         value: "20"
       - key: VITE_API_URL
-        value: https://eims-api.onrender.com/api/v1
+        value: https://eims-api-qe86.onrender.com/api/v1
