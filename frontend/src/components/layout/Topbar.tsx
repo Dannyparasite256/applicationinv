@@ -33,6 +33,7 @@ export function Topbar({ onMenuClick }: TopbarProps) {
   const pendingCount = useNetworkStore((s) => s.pendingCount);
   const displayCurrency = useCurrencyStore((s) => s.displayCurrency);
   const baseCurrency = useCurrencyStore((s) => s.baseCurrency);
+  const locationCurrency = useCurrencyStore((s) => s.locationCurrency);
   const currencies = useCurrencyStore((s) => s.currencies);
   const setDisplayCurrency = useCurrencyStore((s) => s.setDisplayCurrency);
   const qc = useQueryClient();
@@ -125,15 +126,33 @@ export function Topbar({ onMenuClick }: TopbarProps) {
                 });
               }}
             >
-              {(currencies.filter((c) => c.isActive !== false).length
-                ? currencies.filter((c) => c.isActive !== false)
-                : [{ code: displayCurrency, name: displayCurrency, symbol: displayCurrency, exchangeRate: 1 }]
-              ).map((c) => (
-                <option key={c.code} value={c.code}>
-                  {c.code}
-                  {c.isBase ? ' ★' : ''}
-                </option>
-              ))}
+              {(() => {
+                const active = currencies.filter((c) => c.isActive !== false);
+                const codes = new Set(active.map((c) => c.code.toUpperCase()));
+                const extras = [displayCurrency, locationCurrency, baseCurrency]
+                  .filter(Boolean)
+                  .map((c) => String(c).toUpperCase())
+                  .filter((c) => c && !codes.has(c));
+                const options = [
+                  ...active,
+                  ...extras.map((code) => ({
+                    code,
+                    name: code,
+                    symbol: code,
+                    exchangeRate: 1,
+                    isBase: code === baseCurrency,
+                  })),
+                ];
+                return (options.length
+                  ? options
+                  : [{ code: displayCurrency || 'USD', isBase: true }]
+                ).map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.code}
+                    {c.isBase ? ' ★' : ''}
+                  </option>
+                ));
+              })()}
             </select>
           </div>
 

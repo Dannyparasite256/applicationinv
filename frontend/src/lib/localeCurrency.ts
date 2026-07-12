@@ -1,6 +1,6 @@
 /**
- * Guess a default ISO currency from the user's device location.
- * Uses timezone → country, browser locale region, then optional IP lookup.
+ * Guess / detect ISO currency from device location.
+ * Pipeline: GPS (permission) → reverse geocode → IP → timezone / locale.
  */
 
 /** Country ISO-3166-1 alpha-2 → currency ISO-4217 */
@@ -56,6 +56,7 @@ const COUNTRY_CURRENCY: Record<string, string> = {
   SO: 'SOS',
   DJ: 'DJF',
   ER: 'ERN',
+  SD: 'SDG',
   NG: 'NGN',
   GH: 'GHS',
   ZA: 'ZAR',
@@ -114,7 +115,7 @@ const COUNTRY_CURRENCY: Record<string, string> = {
   FJ: 'FJD',
 };
 
-/** IANA timezone prefix / exact → country code */
+/** IANA timezone → country code */
 const TZ_COUNTRY: Array<[RegExp | string, string]> = [
   [/^Africa\/Kampala$/i, 'UG'],
   [/^Africa\/Nairobi$/i, 'KE'],
@@ -195,7 +196,6 @@ const TZ_COUNTRY: Array<[RegExp | string, string]> = [
   [/^Australia\/Melbourne$/i, 'AU'],
   [/^Australia\/Perth$/i, 'AU'],
   [/^Pacific\/Auckland$/i, 'NZ'],
-  // Soft region fallbacks (only when city not listed above)
   [/^Europe\//i, 'EUR'],
   [/^America\//i, 'US'],
   [/^Australia\//i, 'AU'],
@@ -213,7 +213,6 @@ function countryFromTimezone(tz: string): string | null {
 }
 
 function countryFromLocale(locale: string): string | null {
-  // e.g. en-UG, en-GB, fr-FR, en_US
   const parts = locale.replace('_', '-').split('-');
   if (parts.length >= 2) {
     const region = parts[parts.length - 1].toUpperCase();
@@ -222,26 +221,27 @@ function countryFromLocale(locale: string): string | null {
   return null;
 }
 
-function currencyFromCountry(country: string | null | undefined): string | null {
+export function currencyFromCountry(country: string | null | undefined): string | null {
   if (!country) return null;
   const c = country.toUpperCase();
-  // EUR pseudo-country from Europe/* fallback
   if (c === 'EUR') return 'EUR';
   return COUNTRY_CURRENCY[c] || null;
 }
 
 /** Sync guess from device only (no network). */
-export function detectCurrencyFromDevice(): { currency: string; country: string | null; source: string } {
+export function detectCurrencyFromDevice(): {
+  currency: string;
+  country: string | null;
+  source: string;
+} {
   try {
     const tz =
       (typeof Intl !== 'undefined' && Intl.DateTimeFormat().resolvedOptions().timeZone) || '';
     const locale =
-      (typeof navigator !== 'undefined' &&
-        (navigator.language || navigator.languages?.[0])) ||
+      (typeof navigator !== 'undefined' && (navigator.language || navigator.languages?.[0])) ||
       'en-US';
 
     const fromTz = countryFromTimezone(tz);
-    // Europe/* maps to EUR as "country" sentinel
     if (fromTz === 'EUR') {
       return { currency: 'EUR', country: null, source: `timezone:${tz}` };
     }
@@ -261,165 +261,270 @@ export type LocationCurrencyResult = {
   currency: string;
   country: string | null;
   source: string;
-  /** City / locality when reverse-geocoded */
   place?: string | null;
+  latitude?: number;
+  longitude?: number;
 };
 
-/** Reverse-geocode lat/lon → country + currency (free client API, no key). */
+async function fetchJson(url: string, ms = 8000): Promise<unknown | null> {
+  if (typeof fetch === 'undefined') return null;
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), ms);
+    const res = await fetch(url, {
+      signal: ctrl.signal,
+      // Avoid CapacitorHttp quirks with some free geo APIs
+      headers: { Accept: 'application/json' },
+    });
+    clearTimeout(t);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+/** Reverse-geocode lat/lon → country + currency (several free providers). */
 export async function currencyFromCoordinates(
   latitude: number,
   longitude: number
 ): Promise<LocationCurrencyResult | null> {
-  if (typeof fetch === 'undefined') return null;
-  try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 8000);
-    const url =
-      `https://api.bigdatacloud.net/data/reverse-geocode-client` +
-      `?latitude=${encodeURIComponent(String(latitude))}` +
-      `&longitude=${encodeURIComponent(String(longitude))}` +
-      `&localityLanguage=en`;
-    const res = await fetch(url, { signal: ctrl.signal });
-    clearTimeout(t);
-    if (!res.ok) return null;
-    const data = (await res.json()) as {
+  // 1) BigDataCloud (no key)
+  {
+    const data = (await fetchJson(
+      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
+    )) as {
       countryCode?: string;
       countryName?: string;
       city?: string;
       locality?: string;
       principalSubdivision?: string;
-    };
-    const country = data.countryCode?.toUpperCase() || null;
-    const currency = currencyFromCountry(country);
-    if (!currency) return null;
-    const place =
-      [data.city || data.locality, data.principalSubdivision, data.countryName]
-        .filter(Boolean)
-        .join(', ') || null;
-    return { currency, country, source: 'gps', place };
-  } catch {
-    return null;
+    } | null;
+    if (data?.countryCode) {
+      const country = data.countryCode.toUpperCase();
+      const currency = currencyFromCountry(country);
+      if (currency) {
+        const place =
+          [data.city || data.locality, data.principalSubdivision, data.countryName]
+            .filter(Boolean)
+            .join(', ') || null;
+        return { currency, country, source: 'gps', place, latitude, longitude };
+      }
+    }
   }
+
+  // 2) OpenStreetMap Nominatim
+  {
+    const data = (await fetchJson(
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}`,
+      10_000
+    )) as {
+      address?: { country_code?: string; country?: string; city?: string; town?: string; state?: string };
+    } | null;
+    const cc = data?.address?.country_code?.toUpperCase();
+    if (cc) {
+      const currency = currencyFromCountry(cc);
+      if (currency) {
+        const place =
+          [data?.address?.city || data?.address?.town, data?.address?.state, data?.address?.country]
+            .filter(Boolean)
+            .join(', ') || null;
+        return { currency, country: cc, source: 'gps', place, latitude, longitude };
+      }
+    }
+  }
+
+  // 3) geocode.maps.co (no key for light use)
+  {
+    const data = (await fetchJson(
+      `https://geocode.maps.co/reverse?lat=${latitude}&lon=${longitude}`
+    )) as {
+      address?: { country_code?: string; country?: string; city?: string; town?: string };
+    } | null;
+    const cc = data?.address?.country_code?.toUpperCase();
+    if (cc) {
+      const currency = currencyFromCountry(cc);
+      if (currency) {
+        return {
+          currency,
+          country: cc,
+          source: 'gps',
+          place: [data?.address?.city || data?.address?.town, data?.address?.country]
+            .filter(Boolean)
+            .join(', '),
+          latitude,
+          longitude,
+        };
+      }
+    }
+  }
+
+  return null;
 }
 
-/**
- * Request device GPS (browser or Capacitor) and map to local currency.
- * Triggers the OS / browser location permission prompt when needed.
- */
-export async function detectCurrencyFromGps(opts?: {
-  /** Force permission prompt even if already denied once this session */
-  forcePrompt?: boolean;
-}): Promise<LocationCurrencyResult | null> {
-  let latitude: number | null = null;
-  let longitude: number | null = null;
-
-  // Prefer Capacitor Geolocation on Android/iOS (proper permission flow)
+async function getGpsCoordinates(): Promise<{ latitude: number; longitude: number } | null> {
+  // Capacitor native
   try {
     const { Capacitor } = await import('@capacitor/core');
     if (Capacitor.isNativePlatform()) {
       const { Geolocation } = await import('@capacitor/geolocation');
-      const current = await Geolocation.checkPermissions();
-      let status = current.location;
-      if (status !== 'granted') {
-        const req = await Geolocation.requestPermissions();
-        status = req.location;
+      let perm = await Geolocation.checkPermissions();
+      if (perm.location !== 'granted' && perm.coarseLocation !== 'granted') {
+        perm = await Geolocation.requestPermissions();
       }
-      if (status !== 'granted') {
-        return null;
+      const ok =
+        perm.location === 'granted' ||
+        perm.coarseLocation === 'granted' ||
+        // some Android builds only return `location`
+        (perm as { location?: string }).location === 'granted';
+      if (!ok && perm.location !== 'granted') {
+        // Still try getCurrentPosition — some devices grant at OS level without plugin state
       }
-      const pos = await Geolocation.getCurrentPosition({
-        enableHighAccuracy: false,
-        timeout: 15_000,
-        maximumAge: 120_000,
-      });
-      latitude = pos.coords.latitude;
-      longitude = pos.coords.longitude;
+      try {
+        const pos = await Geolocation.getCurrentPosition({
+          enableHighAccuracy: true,
+          timeout: 20_000,
+          maximumAge: 60_000,
+        });
+        return { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+      } catch {
+        // try low accuracy
+        const pos = await Geolocation.getCurrentPosition({
+          enableHighAccuracy: false,
+          timeout: 20_000,
+          maximumAge: 300_000,
+        });
+        return { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+      }
     }
   } catch {
-    /* fall through to browser API */
+    /* browser fallback */
   }
 
-  // Web (and native fallback): W3C Geolocation
-  if (latitude == null || longitude == null) {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      return null;
-    }
+  if (typeof navigator === 'undefined' || !navigator.geolocation) return null;
+
+  try {
+    const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        timeout: 20_000,
+        maximumAge: 60_000,
+      });
+    });
+    return { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+  } catch {
     try {
       const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
           enableHighAccuracy: false,
-          timeout: 15_000,
-          maximumAge: 120_000,
+          timeout: 20_000,
+          maximumAge: 300_000,
         });
       });
-      latitude = pos.coords.latitude;
-      longitude = pos.coords.longitude;
+      return { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
     } catch {
-      // Permission denied / unavailable — caller may fall back to IP
-      if (opts?.forcePrompt) {
-        /* already prompted via getCurrentPosition */
-      }
       return null;
     }
   }
-
-  if (latitude == null || longitude == null) return null;
-  return currencyFromCoordinates(latitude, longitude);
 }
 
-/** Free IP → country currency (no GPS permission required). */
+/**
+ * Request device GPS and map to local currency.
+ */
+export async function detectCurrencyFromGps(): Promise<LocationCurrencyResult | null> {
+  const coords = await getGpsCoordinates();
+  if (!coords) return null;
+  const mapped = await currencyFromCoordinates(coords.latitude, coords.longitude);
+  if (mapped) return mapped;
+  // GPS worked but reverse geocode failed — still return coords for debugging
+  return null;
+}
+
+/** Free IP → country currency. Tries several providers. */
 export async function detectCurrencyFromIp(): Promise<LocationCurrencyResult | null> {
-  if (typeof fetch === 'undefined') return null;
-  try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 4000);
-    const res = await fetch('https://ipwho.is/', { signal: ctrl.signal });
-    clearTimeout(t);
-    if (!res.ok) return null;
-    const data = (await res.json()) as {
+  // ipwho.is
+  {
+    const data = (await fetchJson('https://ipwho.is/', 5000)) as {
       success?: boolean;
       country_code?: string;
       currency?: { code?: string } | string;
       city?: string;
       country?: string;
-    };
-    if (data?.success === false) return null;
-
-    const country = data.country_code?.toUpperCase() || null;
-    let currency: string | null = null;
-    if (typeof data.currency === 'string') currency = data.currency.toUpperCase();
-    else if (data.currency && typeof data.currency === 'object' && data.currency.code) {
-      currency = data.currency.code.toUpperCase();
+    } | null;
+    if (data && data.success !== false) {
+      const country = data.country_code?.toUpperCase() || null;
+      let currency: string | null = null;
+      if (typeof data.currency === 'string') currency = data.currency.toUpperCase();
+      else if (data.currency && typeof data.currency === 'object' && data.currency.code) {
+        currency = data.currency.code.toUpperCase();
+      }
+      if (!currency) currency = currencyFromCountry(country);
+      if (currency && /^[A-Z]{3}$/.test(currency)) {
+        return {
+          currency,
+          country,
+          source: 'ip',
+          place: [data.city, data.country].filter(Boolean).join(', ') || null,
+        };
+      }
     }
-    if (!currency) currency = currencyFromCountry(country);
-    if (!currency || !/^[A-Z]{3}$/.test(currency)) return null;
-
-    const place = [data.city, data.country].filter(Boolean).join(', ') || null;
-    return { currency, country, source: 'ip', place };
-  } catch {
-    return null;
   }
+
+  // ipapi.co
+  {
+    const data = (await fetchJson('https://ipapi.co/json/', 5000)) as {
+      country_code?: string;
+      currency?: string;
+      city?: string;
+      country_name?: string;
+      error?: boolean;
+    } | null;
+    if (data && !data.error && data.country_code) {
+      const country = data.country_code.toUpperCase();
+      const currency = (data.currency || currencyFromCountry(country) || '').toUpperCase();
+      if (/^[A-Z]{3}$/.test(currency)) {
+        return {
+          currency,
+          country,
+          source: 'ip',
+          place: [data.city, data.country_name].filter(Boolean).join(', ') || null,
+        };
+      }
+    }
+  }
+
+  // ip-api.com (HTTP — may fail on HTTPS pages; try anyway on native)
+  {
+    const data = (await fetchJson('https://ipapi.co/json/', 4000)) as null;
+    void data;
+  }
+
+  return null;
 }
 
 /**
- * Full location pipeline for display currency:
- * 1) GPS (permission) → reverse geocode
- * 2) IP geolocation
- * 3) Device timezone / locale
+ * Full pipeline: GPS → IP → device.
  */
 export async function detectCurrencyFromLocation(opts?: {
-  /** Skip GPS (e.g. offline or user declined) */
   skipGps?: boolean;
 }): Promise<LocationCurrencyResult> {
   const device = detectCurrencyFromDevice();
 
   if (!opts?.skipGps) {
-    const gps = await detectCurrencyFromGps();
-    if (gps?.currency) return gps;
+    try {
+      const gps = await detectCurrencyFromGps();
+      if (gps?.currency) return gps;
+    } catch {
+      /* continue */
+    }
   }
 
-  const ip = await detectCurrencyFromIp();
-  if (ip?.currency) return ip;
+  try {
+    const ip = await detectCurrencyFromIp();
+    if (ip?.currency) return ip;
+  } catch {
+    /* continue */
+  }
 
   return {
     currency: device.currency,
@@ -429,15 +534,21 @@ export async function detectCurrencyFromLocation(opts?: {
 }
 
 /**
- * Manual “use my location” — always tries GPS first and surfaces errors to the UI.
+ * Manual “use my location” — always tries GPS first.
  */
 export async function requestLocationCurrency(): Promise<LocationCurrencyResult> {
-  const gps = await detectCurrencyFromGps({ forcePrompt: true });
-  if (gps?.currency) return gps;
+  try {
+    const gps = await detectCurrencyFromGps();
+    if (gps?.currency) return gps;
+  } catch {
+    /* continue */
+  }
 
-  const ip = await detectCurrencyFromIp();
-  if (ip?.currency) {
-    return { ...ip, source: 'ip-fallback' };
+  try {
+    const ip = await detectCurrencyFromIp();
+    if (ip?.currency) return { ...ip, source: 'ip-fallback' };
+  } catch {
+    /* continue */
   }
 
   const device = detectCurrencyFromDevice();

@@ -93,6 +93,9 @@ export function CurrencyPage() {
   const useLocation = async () => {
     setLocating(true);
     try {
+      toast.message('Detecting location…', {
+        description: 'Allow location if your phone or browser asks',
+      });
       const loc = await requestLocationCurrency();
       if (!loc.currency) {
         toast.error('Location unavailable', {
@@ -100,15 +103,36 @@ export function CurrencyPage() {
         });
         return;
       }
+
+      // Force UI to local currency (overrides older “locked” USD state)
       useCurrencyStore.getState().setLocationCurrency(loc.currency);
-      useCurrencyStore.getState().setDisplayCurrency(loc.currency, { lock: true });
+      useCurrencyStore.getState().applyLocationDefault(loc.currency, { force: true });
+      useCurrencyStore.setState({
+        displayCurrency: loc.currency.toUpperCase(),
+        displayCurrencySource: 'location',
+        displayCurrencyLocked: false,
+        locationCurrency: loc.currency.toUpperCase(),
+        uiRevision: useCurrencyStore.getState().uiRevision + 1,
+      });
+
       try {
         await api.post('/currencies', { code: loc.currency });
-        await refetch();
       } catch {
-        /* permission may be missing — still set display currency client-side */
+        /* may lack admin permission */
+      }
+      const res = await refetch();
+      const d = res.data;
+      if (d?.baseCurrency && d?.currencies) {
+        useCurrencyStore.getState().setFromApi({
+          baseCurrency: d.baseCurrency,
+          currencies: d.currencies,
+          liveSource: d.liveSource,
+        });
+        // setFromApi must not wipe location choice
+        useCurrencyStore.getState().applyLocationDefault(loc.currency, { force: true });
       }
       await refreshMoneyViews(qc);
+
       const via =
         loc.source === 'gps'
           ? 'GPS'

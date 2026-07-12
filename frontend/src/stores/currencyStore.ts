@@ -18,11 +18,13 @@ interface CurrencyState {
   /** UI display / payment tender currency — applies app-wide when changed */
   displayCurrency: string;
   /**
-   * True once the user picks a currency in the top bar (or we applied a location default).
-   * Prevents overwriting their choice on every page load.
+   * True only when the user picks a currency in the top bar.
+   * Location detection must not override a deliberate manual choice.
    */
   displayCurrencyLocked: boolean;
-  /** Detected local currency from device/IP (ISO code) */
+  /** Who last set display currency */
+  displayCurrencySource: 'user' | 'location' | 'base' | 'unknown';
+  /** Detected local currency from device/GPS/IP (ISO code) */
   locationCurrency: string | null;
   rates: Record<string, number>; // base units per 1 unit of code
   currencies: AppCurrency[];
@@ -41,7 +43,11 @@ interface CurrencyState {
   setDisplayCurrency: (code: string, opts?: { lock?: boolean }) => void;
   setBaseCurrency: (code: string) => void;
   setLocationCurrency: (code: string | null) => void;
-  applyLocationDefault: (code: string, opts?: { lock?: boolean }) => void;
+  /**
+   * Apply location-detected currency to the UI.
+   * `force: true` overrides a previous manual lock (e.g. “Use my location”).
+   */
+  applyLocationDefault: (code: string, opts?: { lock?: boolean; force?: boolean }) => void;
   /**
    * Convert amount from one currency to another using stored rates.
    * Defaults: from=base, to=display
@@ -71,6 +77,7 @@ export const useCurrencyStore = create<CurrencyState>()(
       baseCurrency: 'USD',
       displayCurrency: 'USD',
       displayCurrencyLocked: false,
+      displayCurrencySource: 'unknown',
       locationCurrency: null,
       rates: { USD: 1 },
       currencies: [{ code: 'USD', name: 'US Dollar', symbol: '$', exchangeRate: 1, isBase: true }],
@@ -86,20 +93,36 @@ export const useCurrencyStore = create<CurrencyState>()(
         }
         rates[base] = 1;
         const prev = get();
-        const { displayCurrency, displayCurrencyLocked, locationCurrency, uiRevision } = prev;
+        const {
+          displayCurrency,
+          displayCurrencyLocked,
+          displayCurrencySource,
+          locationCurrency,
+          uiRevision,
+        } = prev;
         let nextDisplay = displayCurrency;
-        if (displayCurrencyLocked) {
+        let nextSource = displayCurrencySource;
+
+        if (displayCurrencyLocked && displayCurrencySource === 'user') {
+          // Keep user's top-bar choice if still available; else fall back to base
           const stillValid = currencies.some(
             (c) => c.code.toUpperCase() === displayCurrency.toUpperCase() && c.isActive !== false
           );
-          if (!stillValid) nextDisplay = base;
+          if (!stillValid) {
+            nextDisplay = base;
+            nextSource = 'base';
+          }
         } else {
-          // Prefer location currency if company has it enabled; else company base
+          // Prefer detected location currency (even before rate is in the list —
+          // ensureCurrencyEnabled will add the rate shortly).
           const loc = (locationCurrency || '').toUpperCase();
-          const hasLoc = loc
-            ? currencies.some((c) => c.code.toUpperCase() === loc && c.isActive !== false)
-            : false;
-          nextDisplay = hasLoc ? loc : base;
+          if (loc && /^[A-Z]{3}$/.test(loc)) {
+            nextDisplay = loc;
+            nextSource = 'location';
+          } else if (!displayCurrency || displayCurrencySource === 'unknown') {
+            nextDisplay = base;
+            nextSource = 'base';
+          }
         }
 
         // Avoid remount thrash when bootstrap / page sync re-applies the same rates
@@ -131,6 +154,10 @@ export const useCurrencyStore = create<CurrencyState>()(
           lastSyncedAt: new Date().toISOString(),
           liveSource: liveSource ?? prev.liveSource,
           displayCurrency: nextDisplay,
+          displayCurrencySource: nextSource,
+          // Location-sourced display must stay unlocked so later GPS can refine
+          displayCurrencyLocked:
+            nextSource === 'user' ? displayCurrencyLocked : false,
           uiRevision: noVisualChange ? uiRevision : uiRevision + 1,
         });
       },
@@ -140,15 +167,18 @@ export const useCurrencyStore = create<CurrencyState>()(
         const shouldLock = opts?.lock !== false;
         const prev = get().displayCurrency;
         if (prev === c) {
-          // Same code — only lock if needed, no remount
           if (shouldLock && !get().displayCurrencyLocked) {
-            set({ displayCurrencyLocked: true });
+            set({
+              displayCurrencyLocked: true,
+              displayCurrencySource: 'user',
+            });
           }
           return;
         }
         set({
           displayCurrency: c,
-          displayCurrencyLocked: shouldLock ? true : get().displayCurrencyLocked,
+          displayCurrencyLocked: shouldLock,
+          displayCurrencySource: shouldLock ? 'user' : get().displayCurrencySource,
           uiRevision: get().uiRevision + 1,
         });
       },
@@ -159,6 +189,7 @@ export const useCurrencyStore = create<CurrencyState>()(
           baseCurrency: c,
           displayCurrency: c,
           displayCurrencyLocked: true,
+          displayCurrencySource: 'user',
           uiRevision: get().uiRevision + 1,
         });
       },
@@ -170,26 +201,31 @@ export const useCurrencyStore = create<CurrencyState>()(
       applyLocationDefault: (code, opts) => {
         const c = code.toUpperCase();
         if (!/^[A-Z]{3}$/.test(c)) return;
-        const { displayCurrencyLocked, displayCurrency, uiRevision } = get();
-        if (displayCurrencyLocked) {
-          // User already chose — only remember location, don't override
+        const { displayCurrencyLocked, displayCurrencySource, displayCurrency, uiRevision } =
+          get();
+        const force = opts?.force === true;
+
+        // Only a deliberate top-bar pick blocks auto location (unless force)
+        if (!force && displayCurrencyLocked && displayCurrencySource === 'user') {
           set({ locationCurrency: c });
           return;
         }
-        const nextLock = opts?.lock === true;
-        // Avoid remount thrash when device/IP settle on same code
+
         if (displayCurrency === c) {
           set({
             locationCurrency: c,
-            displayCurrencyLocked: nextLock,
+            displayCurrencySource: 'location',
+            displayCurrencyLocked: false,
           });
           return;
         }
+
         set({
           locationCurrency: c,
           displayCurrency: c,
-          // Lock after IP refine so we don't thrash; device-only guess stays unlocked
-          displayCurrencyLocked: nextLock,
+          displayCurrencySource: 'location',
+          // Location should never sticky-lock against future GPS refinements
+          displayCurrencyLocked: false,
           uiRevision: uiRevision + 1,
         });
       },
@@ -231,11 +267,27 @@ export const useCurrencyStore = create<CurrencyState>()(
         baseCurrency: s.baseCurrency,
         displayCurrency: s.displayCurrency,
         displayCurrencyLocked: s.displayCurrencyLocked,
+        displayCurrencySource: s.displayCurrencySource,
         locationCurrency: s.locationCurrency,
         rates: s.rates,
         currencies: s.currencies,
         lastSyncedAt: s.lastSyncedAt,
       }),
+      // Migrate older persisted state that locked currency after IP detect
+      merge: (persisted, current) => {
+        const p = (persisted || {}) as Partial<CurrencyState>;
+        const merged = { ...current, ...p };
+        // If locked but source missing/unknown, treat as not a hard user lock
+        // so GPS can update (fixes "allowed location but currency stuck")
+        if (
+          merged.displayCurrencyLocked &&
+          (!merged.displayCurrencySource || merged.displayCurrencySource === 'unknown')
+        ) {
+          merged.displayCurrencyLocked = false;
+          merged.displayCurrencySource = 'unknown';
+        }
+        return merged;
+      },
     }
   )
 );

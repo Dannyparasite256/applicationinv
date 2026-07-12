@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -19,16 +19,32 @@ type CurrencyApi = {
   liveDate?: string;
 };
 
-/** Ensure company has this currency enabled so the top-bar selector can use it. */
-async function ensureCurrencyEnabled(code: string, qc: QueryClient) {
+/** Enable currency on the company so rates exist for conversion. */
+async function ensureCurrencyEnabled(
+  code: string,
+  qc: QueryClient
+): Promise<CurrencyApi | null> {
+  const upper = code.toUpperCase();
   const list = useCurrencyStore.getState().currencies;
-  const has = list.some((c) => c.code.toUpperCase() === code.toUpperCase() && c.isActive !== false);
-  if (has) return;
+  const has = list.some((c) => c.code.toUpperCase() === upper && c.isActive !== false);
+
   try {
-    await api.post('/currencies', { code: code.toUpperCase() });
+    if (!has) {
+      await api.post('/currencies', { code: upper });
+    }
+    // Always re-fetch so exchange rates are present for the new code
+    const res = await api.get<{ data: CurrencyApi }>('/currencies');
+    const data = res.data.data;
+    useCurrencyStore.getState().setFromApi({
+      baseCurrency: data.baseCurrency,
+      currencies: data.currencies,
+      liveSource: data.liveSource,
+    });
     await qc.invalidateQueries({ queryKey: ['currencies'], refetchType: 'active' });
+    return data;
   } catch {
-    /* may lack settings.company permission — ignore */
+    /* staff may lack permission — display code can still change client-side */
+    return null;
   }
 }
 
@@ -40,17 +56,17 @@ export function useCurrencyBootstrap() {
   const applyLocationDefault = useCurrencyStore((s) => s.applyLocationDefault);
   const setLocationCurrency = useCurrencyStore((s) => s.setLocationCurrency);
   const qc = useQueryClient();
+  const locationRunId = useRef(0);
 
   const query = useQuery({
     queryKey: ['currencies', companyId],
     queryFn: async () => {
-      // GET auto-refreshes stale rates on the server via ExchangeRate-API
       const res = await api.get<{ data: CurrencyApi }>('/currencies');
       return res.data.data;
     },
     enabled: !!token && !!companyId,
     staleTime: 60_000,
-    refetchInterval: online ? 15 * 60_000 : false, // re-check every 15 min
+    refetchInterval: online ? 15 * 60_000 : false,
   });
 
   useEffect(() => {
@@ -64,47 +80,58 @@ export function useCurrencyBootstrap() {
   }, [query.data, setFromApi]);
 
   /**
-   * Detect local currency:
-   * 1) device timezone/locale (instant)
-   * 2) GPS (permission) → reverse geocode — most accurate
-   * 3) IP country fallback
-   *
-   * Does not override a currency the user picked manually in the top bar.
+   * Detect local currency and force it into the UI:
+   * 1) device timezone (instant)
+   * 2) GPS (permission) → reverse geocode
+   * 3) IP country
+   * Then enable that currency on the company and re-apply rates.
    */
   useEffect(() => {
     let cancelled = false;
+    const runId = ++locationRunId.current;
 
-    const apply = async (currency: string, source: string) => {
-      if (cancelled || !currency) return;
+    const applyDetected = async (currency: string, source: string, force: boolean) => {
+      if (cancelled || runId !== locationRunId.current || !currency) return;
+
       setLocationCurrency(currency);
-      // Never lock from auto-detect — only top-bar manual pick locks
-      applyLocationDefault(currency, { lock: false });
+      applyLocationDefault(currency, { force });
+
       if (token && companyId) {
         await ensureCurrencyEnabled(currency, qc);
+        if (cancelled || runId !== locationRunId.current) return;
+        // Re-apply after rates load (setFromApi may have briefly preferred base)
+        applyLocationDefault(currency, { force });
       }
-      // Soft log for debugging; no toast spam on every launch
+
+      await refreshMoneyViews(qc);
+
       if (import.meta.env.DEV) {
-        console.info(`[currency] location default ${currency} via ${source}`);
+        console.info(
+          `[currency] applied ${currency} via ${source} (display=${useCurrencyStore.getState().displayCurrency})`
+        );
       }
     };
 
+    // Instant device guess (timezone is often enough for Uganda / Africa / etc.)
     const device = detectCurrencyFromDevice();
-    void apply(device.currency, device.source);
+    void applyDetected(device.currency, device.source, false);
 
     void (async () => {
-      // Small delay so the app shell paints before the permission dialog
-      await new Promise((r) => setTimeout(r, 600));
-      if (cancelled) return;
+      // Let the shell paint, then request GPS (shows permission dialog)
+      await new Promise((r) => setTimeout(r, 800));
+      if (cancelled || runId !== locationRunId.current) return;
 
       const loc = await detectCurrencyFromLocation();
-      if (cancelled) return;
-      await apply(loc.currency, loc.source);
+      if (cancelled || runId !== locationRunId.current) return;
 
-      // After GPS/IP, remount money views if display currency changed
-      const display = useCurrencyStore.getState().displayCurrency;
-      if (display?.toUpperCase() === loc.currency.toUpperCase()) {
-        void refreshMoneyViews(qc);
-      }
+      // GPS / IP should win over a stale locked USD from older app versions
+      const force =
+        loc.source === 'gps' ||
+        loc.source === 'ip' ||
+        loc.source === 'ip-fallback' ||
+        useCurrencyStore.getState().displayCurrencySource !== 'user';
+
+      await applyDetected(loc.currency, loc.source, force);
     })();
 
     return () => {
@@ -120,11 +147,16 @@ export function useCurrencyBootstrap() {
       currencies: data.currencies,
       liveSource: data.liveSource,
     });
+    // Keep location display if not user-picked
+    const loc = useCurrencyStore.getState().locationCurrency;
+    if (loc && useCurrencyStore.getState().displayCurrencySource !== 'user') {
+      applyLocationDefault(loc, { force: true });
+    }
     await qc.invalidateQueries({ queryKey: ['currencies'], refetchType: 'active' });
     await refreshMoneyViews(qc);
     toast.success(`Rates updated${data.liveSource ? ` · ${data.liveSource}` : ''}`);
     return data;
-  }, [qc, setFromApi]);
+  }, [qc, setFromApi, applyLocationDefault]);
 
   const setBase = useCallback(
     async (code: string) => {
@@ -136,8 +168,6 @@ export function useCurrencyBootstrap() {
         liveSource: data.liveSource,
       });
       useCurrencyStore.getState().setBaseCurrency(data.baseCurrency);
-      useCurrencyStore.getState().setDisplayCurrency(data.baseCurrency);
-      // keep auth company currency in sync
       const user = useAuthStore.getState().user;
       if (user?.company) {
         useAuthStore.getState().setUser({
@@ -154,8 +184,9 @@ export function useCurrencyBootstrap() {
     [qc, setFromApi]
   );
 
-  /** Prompt for GPS and switch display currency to the local one. */
+  /** Prompt for GPS and switch display currency to the local one (always force). */
   const useMyLocation = useCallback(async () => {
+    toast.message('Detecting location…', { description: 'Allow location if prompted' });
     const loc = await requestLocationCurrency();
     if (!loc.currency) {
       toast.error('Could not determine your location');
@@ -163,11 +194,22 @@ export function useCurrencyBootstrap() {
     }
 
     setLocationCurrency(loc.currency);
-    // Manual “use my location” should apply even if a previous auto choice was locked
-    useCurrencyStore.getState().setDisplayCurrency(loc.currency, { lock: true });
+    applyLocationDefault(loc.currency, { force: true });
+
     if (token && companyId) {
       await ensureCurrencyEnabled(loc.currency, qc);
+      applyLocationDefault(loc.currency, { force: true });
     }
+
+    // Final hard set so top bar + amounts update immediately
+    useCurrencyStore.setState({
+      displayCurrency: loc.currency.toUpperCase(),
+      displayCurrencySource: 'location',
+      displayCurrencyLocked: false,
+      locationCurrency: loc.currency.toUpperCase(),
+      uiRevision: useCurrencyStore.getState().uiRevision + 1,
+    });
+
     await refreshMoneyViews(qc);
 
     const via =
@@ -176,13 +218,12 @@ export function useCurrencyBootstrap() {
         : loc.source === 'ip' || loc.source === 'ip-fallback'
           ? 'network location'
           : 'device settings';
-    toast.success(`Display currency set to ${loc.currency}`, {
+    toast.success(`Currency set to ${loc.currency}`, {
       description: loc.place ? `${loc.place} · ${via}` : `Detected via ${via}`,
     });
     return loc;
-  }, [token, companyId, setLocationCurrency, qc]);
+  }, [token, companyId, setLocationCurrency, applyLocationDefault, qc]);
 
-  // Force a live ExchangeRate-API pull when session comes online
   useEffect(() => {
     if (!online || !token || !companyId) return;
     let cancelled = false;
@@ -196,15 +237,19 @@ export function useCurrencyBootstrap() {
           currencies: data.currencies,
           liveSource: data.liveSource,
         });
+        const loc = useCurrencyStore.getState().locationCurrency;
+        if (loc && useCurrencyStore.getState().displayCurrencySource !== 'user') {
+          applyLocationDefault(loc, { force: true });
+        }
         void qc.invalidateQueries({ queryKey: ['currencies'] });
       })
       .catch(() => {
-        /* keep cached rates — GET list may still auto-refresh if stale */
+        /* keep cached rates */
       });
     return () => {
       cancelled = true;
     };
-  }, [online, token, companyId, setFromApi, qc]);
+  }, [online, token, companyId, setFromApi, applyLocationDefault, qc]);
 
   return {
     ...query,
