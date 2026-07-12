@@ -151,6 +151,7 @@ export const APP_FONTS: AppFontOption[] = [
 ];
 
 const GOOGLE_LINK_ID = 'eims-app-font';
+const GOOGLE_PREVIEW_LINK_ID = 'eims-app-font-preview';
 
 export function getFontOption(id: string | null | undefined): AppFontOption {
   return APP_FONTS.find((f) => f.id === id) || APP_FONTS[0];
@@ -159,6 +160,31 @@ export function getFontOption(id: string | null | undefined): AppFontOption {
 function resolveStack(font: AppFontOption): string {
   if (font.id === 'system') return getSystemFontStack();
   return font.stack;
+}
+
+/** CSS font-family stack for previews (does not change the whole app). */
+export function getFontPreviewStack(fontId: AppFontId | string): string {
+  return resolveStack(getFontOption(fontId));
+}
+
+/**
+ * Load a Google Font only for preview (separate link from the active app font).
+ * Safe to call repeatedly when browsing the font list.
+ */
+export function loadFontForPreview(fontId: AppFontId | string): void {
+  const font = getFontOption(fontId);
+  let link = document.getElementById(GOOGLE_PREVIEW_LINK_ID) as HTMLLinkElement | null;
+  if (!font.google) {
+    // System font — no download
+    return;
+  }
+  if (!link) {
+    link = document.createElement('link');
+    link.id = GOOGLE_PREVIEW_LINK_ID;
+    link.rel = 'stylesheet';
+    document.head.appendChild(link);
+  }
+  link.href = `https://fonts.googleapis.com/css2?family=${font.google}&display=swap`;
 }
 
 /** Apply font to the document (CSS variables + optional Google Fonts load). */

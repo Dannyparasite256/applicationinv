@@ -9,7 +9,12 @@ import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { useCurrencyStore } from '@/stores/currencyStore';
 import { canRefundOrDeleteSales } from '@/lib/roleAccess';
-import { APP_FONTS, type AppFontId } from '@/lib/fonts';
+import {
+  APP_FONTS,
+  getFontPreviewStack,
+  loadFontForPreview,
+  type AppFontId,
+} from '@/lib/fonts';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
@@ -27,6 +32,10 @@ import {
   Camera,
   Building2,
   ImagePlus,
+  Check,
+  Type,
+  X,
+  ChevronRight,
 } from 'lucide-react';
 import { PrintShareDialog } from '@/components/shared/PrintShareDialog';
 import { Link } from 'react-router-dom';
@@ -2007,6 +2016,8 @@ export function SettingsPage() {
   const setFontId = useThemeStore((s) => s.setFontId);
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
+  /** Font name list → tap to preview → Confirm to apply */
+  const [previewFontId, setPreviewFontId] = useState<AppFontId | null>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const { data } = useQuery({
     queryKey: ['company'],
@@ -2222,47 +2233,36 @@ export function SettingsPage() {
           <div>
             <p className="text-sm font-medium mb-1">App font</p>
             <p className="text-xs text-muted-foreground mb-3">
-              <strong>Phone system font</strong> uses the same device typeface as apps like WhatsApp
-              (not a downloaded web font). Other options are optional styles.
+              Tap a name to preview how it looks. Press <strong>Use this font</strong> only when you
+              like it.
             </p>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="rounded-xl border border-border overflow-hidden divide-y divide-border">
               {APP_FONTS.map((font) => {
                 const selected = fontId === font.id;
-                const previewStack =
-                  font.id === 'system'
-                    ? 'sans-serif, system-ui, -apple-system, sans-serif'
-                    : font.stack;
                 return (
                   <button
                     key={font.id}
                     type="button"
                     onClick={() => {
-                      setFontId(font.id as AppFontId);
-                      toast.success(
-                        font.id === 'system'
-                          ? 'Using your phone system font (like WhatsApp)'
-                          : `Font set to ${font.label}`
-                      );
+                      loadFontForPreview(font.id);
+                      setPreviewFontId(font.id as AppFontId);
                     }}
-                    className={`text-left rounded-xl border p-3 transition-all ${
-                      selected
-                        ? 'border-primary bg-primary/5 ring-2 ring-primary/30 shadow-sm'
-                        : 'border-border hover:border-primary/40 bg-card'
+                    className={`w-full flex items-center justify-between gap-3 px-3 py-3 text-left transition-colors min-h-[3rem] ${
+                      selected ? 'bg-primary/5' : 'bg-card hover:bg-muted/50'
                     }`}
-                    style={{ fontFamily: previewStack }}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="font-semibold text-sm">{font.label}</p>
-                      {selected && (
-                        <Badge variant="success" className="text-[10px]">
-                          Active
-                        </Badge>
-                      )}
+                    <div className="min-w-0 flex items-center gap-2.5">
+                      <Type
+                        className={`h-4 w-4 shrink-0 ${selected ? 'text-primary' : 'text-muted-foreground'}`}
+                      />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{font.label}</p>
+                        {selected && (
+                          <p className="text-[11px] text-primary font-medium">Currently in use</p>
+                        )}
+                      </div>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">{font.description}</p>
-                    <p className="mt-2 text-base" style={{ letterSpacing: 'normal' }}>
-                      The quick brown fox · 0123456789
-                    </p>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                   </button>
                 );
               })}
@@ -2270,6 +2270,110 @@ export function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Font preview sheet — names only in list; confirm applies */}
+      {previewFontId && (
+        <div
+          className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Font preview"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/50 border-0"
+            aria-label="Close preview"
+            onClick={() => setPreviewFontId(null)}
+          />
+          <div className="relative z-10 w-full sm:max-w-md max-h-[92dvh] overflow-y-auto rounded-t-2xl sm:rounded-2xl border border-border bg-card shadow-elevated m-0 sm:m-4">
+            {(() => {
+              const font = APP_FONTS.find((f) => f.id === previewFontId) || APP_FONTS[0];
+              const stack = getFontPreviewStack(font.id);
+              const isActive = fontId === font.id;
+              return (
+                <>
+                  <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border">
+                    <div className="min-w-0">
+                      <h3 className="text-base font-semibold truncate">{font.label}</h3>
+                      <p className="text-xs text-muted-foreground">{font.description}</p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="shrink-0"
+                      onClick={() => setPreviewFontId(null)}
+                      aria-label="Close"
+                    >
+                      <X className="h-5 w-5" />
+                    </Button>
+                  </div>
+
+                  <div className="p-4 space-y-4" style={{ fontFamily: stack }}>
+                    <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Preview
+                      </p>
+                      <p className="text-2xl font-bold leading-tight">Enterprise IMS</p>
+                      <p className="text-base font-semibold">Dashboard · Products · Sales</p>
+                      <p className="text-sm leading-relaxed text-muted-foreground">
+                        The quick brown fox jumps over the lazy dog. Pack my box with five dozen
+                        liquor jugs.
+                      </p>
+                      <p className="text-sm tabular-nums">
+                        Prices: 12,500 · Stock: 48 · Order #1042
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        ABCDEFGHIJKLMNOPQRSTUVWXYZ
+                        <br />
+                        abcdefghijklmnopqrstuvwxyz
+                        <br />
+                        0123456789
+                      </p>
+                    </div>
+                    {isActive && (
+                      <p className="text-xs text-center text-primary font-medium flex items-center justify-center gap-1">
+                        <Check className="h-3.5 w-3.5" /> This is your current app font
+                      </p>
+                    )}
+                  </div>
+
+                  <div
+                    className="flex gap-2 px-4 py-3 border-t border-border bg-card"
+                    style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))' }}
+                  >
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-1 h-11"
+                      onClick={() => setPreviewFontId(null)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      className="flex-1 h-11"
+                      disabled={isActive}
+                      onClick={() => {
+                        setFontId(font.id as AppFontId);
+                        setPreviewFontId(null);
+                        toast.success(
+                          font.id === 'system'
+                            ? 'Using your phone system font'
+                            : `Font set to ${font.label}`
+                        );
+                      }}
+                    >
+                      <Check className="h-4 w-4" />
+                      {isActive ? 'In use' : 'Use this font'}
+                    </Button>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-5 lg:grid-cols-2">
         <Card className="overflow-hidden lg:col-span-2 border-primary/15">
