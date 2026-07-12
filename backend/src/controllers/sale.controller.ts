@@ -36,8 +36,21 @@ export const remove = asyncHandler(async (req: Request, res: Response) => {
 export const refund = asyncHandler(async (req: Request, res: Response) => {
   const sale = await saleService.refundSale(req.companyId, req.user!.id, req.params.id, {
     reason: req.body?.reason,
+    mode: req.body?.mode === 'PARTIAL' ? 'PARTIAL' : 'FULL',
+    items: Array.isArray(req.body?.items) ? req.body.items : undefined,
   });
   return success(res, sale, 'Sale refunded — inventory restored');
+});
+
+export const zReportPdf = asyncHandler(async (req: Request, res: Response) => {
+  const { zReportPdf: build } = await import('../services/reportPdf.service');
+  const buf = await build(req.companyId, req.params.id);
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="z-report-${req.params.id.slice(0, 8)}.pdf"`
+  );
+  return res.send(buf);
 });
 
 export const openShift = asyncHandler(async (req: Request, res: Response) => {

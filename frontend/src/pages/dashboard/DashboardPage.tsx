@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -30,6 +31,8 @@ import { api } from '@/lib/api';
 import { formatCurrency, formatNumber } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { useAuthStore } from '@/stores/authStore';
 import { useNetworkStore } from '@/stores/networkStore';
 import { OnboardingChecklist } from '@/components/shared/OnboardingChecklist';
@@ -76,6 +79,28 @@ export function DashboardPage() {
   const roles = user?.roles || [];
   const isSuperAdmin = roles.includes('SUPER_ADMIN');
   const pendingCount = useNetworkStore((s) => s.pendingCount);
+  const [range, setRange] = useState<'today' | '7d' | '30d' | 'mtd' | 'custom'>('mtd');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [branchId, setBranchId] = useState('');
+
+  const rangeParams = useMemo(() => {
+    const end = new Date();
+    const start = new Date();
+    if (range === 'today') {
+      /* same day */
+    } else if (range === '7d') start.setDate(end.getDate() - 6);
+    else if (range === '30d') start.setDate(end.getDate() - 29);
+    else if (range === 'mtd') start.setDate(1);
+    else if (range === 'custom' && from && to) {
+      return { from, to, branchId: branchId || undefined };
+    } else {
+      start.setDate(1);
+    }
+    const f = start.toISOString().slice(0, 10);
+    const t = end.toISOString().slice(0, 10);
+    return { from: f, to: t, branchId: branchId || undefined };
+  }, [range, from, to, branchId]);
 
   const { data: platformKpis } = useQuery({
     queryKey: ['platform-overview-mini'],
@@ -89,11 +114,19 @@ export function DashboardPage() {
     staleTime: 60_000,
   });
 
+  const { data: branches } = useQuery({
+    queryKey: ['branches'],
+    queryFn: async () => (await api.get('/branches')).data.data as Array<{ id: string; name: string }>,
+    staleTime: 120_000,
+  });
+
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ['dashboard'],
+    queryKey: ['dashboard', rangeParams],
     queryFn: async () => {
       try {
-        const res = await api.get<{ data: DashboardData }>('/dashboard');
+        const res = await api.get<{ data: DashboardData }>('/dashboard', {
+          params: rangeParams,
+        });
         const payload = res.data.data;
         const { saveSnapshot } = await import('@/lib/offline/db');
         await saveSnapshot('dashboard', payload);
@@ -178,6 +211,59 @@ export function DashboardPage() {
       </div>
 
       <OnboardingChecklist />
+
+      <Card>
+        <CardContent className="p-3 flex flex-wrap gap-2 items-end">
+          {(
+            [
+              ['today', 'Today'],
+              ['7d', '7 days'],
+              ['30d', '30 days'],
+              ['mtd', 'Month'],
+              ['custom', 'Custom'],
+            ] as const
+          ).map(([id, label]) => (
+            <Button
+              key={id}
+              size="sm"
+              variant={range === id ? 'default' : 'outline'}
+              onClick={() => setRange(id)}
+            >
+              {label}
+            </Button>
+          ))}
+          {range === 'custom' && (
+            <>
+              <Input
+                type="date"
+                className="h-9 w-auto"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+              />
+              <Input
+                type="date"
+                className="h-9 w-auto"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+              />
+            </>
+          )}
+          {(branches?.length || 0) > 0 && (
+            <select
+              className="h-9 rounded-lg border border-input bg-background px-2 text-sm"
+              value={branchId}
+              onChange={(e) => setBranchId(e.target.value)}
+            >
+              <option value="">All branches</option>
+              {branches!.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="border-primary/15 bg-gradient-to-r from-primary/5 via-card to-accent/5">
         <CardContent className="pt-3 pb-3 flex items-start gap-2.5">

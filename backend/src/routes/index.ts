@@ -10,6 +10,7 @@ import * as customerController from '../controllers/customer.controller';
 import * as purchaseController from '../controllers/purchase.controller';
 import * as hospitalController from '../controllers/hospital.controller';
 import * as companyController from '../controllers/company.controller';
+import * as ops from '../controllers/ops.controller';
 import { authenticate, requireTenant, requirePermissions, requireAnyPermission } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { createCustomerSchema, createSupplierSchema, createPatientSchema } from '../validators/customer.validator';
@@ -43,6 +44,20 @@ router.get('/dashboard', authenticate, requireTenant, dashboardController.stats)
 router.get('/customers', authenticate, requireTenant, requirePermissions('crm.customers.read'), customerController.listCustomers);
 router.post('/customers', authenticate, requireTenant, requirePermissions('crm.customers.create'), validate(createCustomerSchema), auditLog('customers'), customerController.createCustomer);
 router.get('/customers/:id', authenticate, requireTenant, requirePermissions('crm.customers.read'), customerController.getCustomer);
+router.get(
+  '/customers/:id/statement',
+  authenticate,
+  requireTenant,
+  requirePermissions('crm.customers.read'),
+  ops.customerStatement
+);
+router.get(
+  '/customers/:id/statement.pdf',
+  authenticate,
+  requireTenant,
+  requirePermissions('crm.customers.read'),
+  ops.customerStatementPdf
+);
 router.put('/customers/:id', authenticate, requireTenant, requirePermissions('crm.customers.create'), auditLog('customers'), customerController.updateCustomer);
 router.get('/suppliers', authenticate, requireTenant, requirePermissions('purchases.read'), customerController.listSuppliers);
 router.post('/suppliers', authenticate, requireTenant, requirePermissions('purchases.create'), validate(createSupplierSchema), auditLog('suppliers'), customerController.createSupplier);
@@ -52,6 +67,21 @@ router.get('/purchases', authenticate, requireTenant, requirePermissions('purcha
 router.get('/purchases/:id', authenticate, requireTenant, requirePermissions('purchases.read'), purchaseController.getById);
 router.post('/purchases', authenticate, requireTenant, requirePermissions('purchases.create'), validate(createPurchaseSchema), auditLog('purchases'), purchaseController.create);
 router.post('/purchases/:id/receive', authenticate, requireTenant, requirePermissions('purchases.update'), validate(receivePurchaseSchema), auditLog('purchases'), purchaseController.receive);
+router.patch(
+  '/purchases/:id/status',
+  authenticate,
+  requireTenant,
+  requirePermissions('purchases.update'),
+  auditLog('purchases'),
+  purchaseController.updateStatus
+);
+router.get(
+  '/purchases/:id/pdf',
+  authenticate,
+  requireTenant,
+  requirePermissions('purchases.read'),
+  ops.purchaseOrderPdf
+);
 
 // Hospital
 router.get('/patients', authenticate, requireTenant, requirePermissions('hospital.patients.read'), hospitalController.listPatients);

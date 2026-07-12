@@ -32,6 +32,7 @@ import { PlatformAdminPage } from '@/pages/admin/PlatformAdminPage';
 import { PlatformBusinessesPage } from '@/pages/admin/PlatformBusinessesPage';
 import { PlatformBusinessDetailPage } from '@/pages/admin/PlatformBusinessDetailPage';
 import { StaffPage } from '@/pages/admin/StaffPage';
+import { SyncCenterPage } from '@/pages/SyncCenterPage';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import { useAuthStore } from '@/stores/authStore';
 import { canAccessPath, getDefaultHome } from '@/lib/roleAccess';
@@ -143,6 +144,7 @@ export default function App() {
               <Route path="settings/profile" element={<Guard><ProfilePage /></Guard>} />
               <Route path="settings/currency" element={<Guard><CurrencyPage /></Guard>} />
               <Route path="settings/staff" element={<Guard><AddStaffPage /></Guard>} />
+              <Route path="sync" element={<Guard><SyncCenterPage /></Guard>} />
             </Route>
 
             <Route path="*" element={<Navigate to="/login" replace />} />

@@ -29,6 +29,11 @@ router.post(
   validate(closeShiftSchema),
   saleController.closeShift
 );
+router.get(
+  '/shifts/:id/z-report.pdf',
+  requirePermissions('pos.access'),
+  saleController.zReportPdf
+);
 // Offline bulk sync must be registered before /:id
 router.post('/sync-offline', requirePermissions('pos.access'), ops.syncOffline);
 router.post(

@@ -149,6 +149,8 @@ router.get(
   requirePermissions('reports.read'),
   ops.customerBalancesPdf
 );
+router.get('/reports/ar-aging', requirePermissions('reports.read'), ops.arAgingReport);
+router.get('/reports/ar-aging.pdf', requirePermissions('reports.read'), ops.arAgingPdf);
 
 // Users & org (static paths before :id)
 router.get('/users/pending/count', requirePermissions('users.manage'), ops.pendingStaffCount);

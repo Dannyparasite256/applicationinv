@@ -15,6 +15,7 @@ import {
   Vibrate,
   Palette,
   Type as TypeIcon,
+  CloudUpload,
 } from 'lucide-react';
 import { api, getErrorMessage } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
@@ -110,6 +111,20 @@ export function SettingsHubPage() {
           Open a section below — each has its own full screen
         </p>
       </div>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Connectivity</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <SettingsLink
+            to="/app/sync"
+            icon={CloudUpload}
+            title="Sync center"
+            subtitle="Offline queue, retry, refresh catalog"
+          />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="pb-2">

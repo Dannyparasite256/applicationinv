@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs';
 import { prisma } from '../config/database';
-import { ForbiddenError } from '../utils/errors';
+import { ForbiddenError, NotFoundError } from '../utils/errors';
 import { startOfDay, endOfDay, startOfMonth, endOfMonth, format } from 'date-fns';
 
 function requireCompany(companyId?: string | null): string {
@@ -153,6 +153,151 @@ export async function customerBalances(companyId: string | null | undefined) {
       creditLimit: true,
     },
   });
+}
+
+/** AR aging buckets from open invoices */
+export async function arAgingReport(companyId: string | null | undefined) {
+  const cid = requireCompany(companyId);
+  const now = new Date();
+  const invoices = await prisma.invoice.findMany({
+    where: {
+      companyId: cid,
+      deletedAt: null,
+      status: { notIn: ['PAID', 'VOID', 'CANCELLED'] },
+    },
+    include: {
+      customer: {
+        select: { id: true, code: true, firstName: true, lastName: true, businessName: true },
+      },
+    },
+  });
+
+  const buckets = {
+    current: 0,
+    d1_30: 0,
+    d31_60: 0,
+    d61_90: 0,
+    d90p: 0,
+  };
+  const rows = invoices.map((inv) => {
+    const due = inv.dueDate || inv.issuedAt || now;
+    const days = Math.max(0, Math.floor((now.getTime() - new Date(due).getTime()) / 86400000));
+    const bal = Math.max(0, Number(inv.total) - Number(inv.paidAmount));
+    let bucket: keyof typeof buckets = 'current';
+    if (days <= 0) bucket = 'current';
+    else if (days <= 30) bucket = 'd1_30';
+    else if (days <= 60) bucket = 'd31_60';
+    else if (days <= 90) bucket = 'd61_90';
+    else bucket = 'd90p';
+    buckets[bucket] += bal;
+    const name =
+      inv.customer?.businessName ||
+      `${inv.customer?.firstName || ''} ${inv.customer?.lastName || ''}`.trim() ||
+      '—';
+    return {
+      invoiceNo: inv.invoiceNo,
+      customer: name,
+      customerCode: inv.customer?.code || '',
+      balance: bal,
+      daysPastDue: days,
+      bucket,
+      dueDate: due,
+    };
+  });
+
+  return {
+    asOf: now,
+    buckets: {
+      current: buckets.current,
+      days1to30: buckets.d1_30,
+      days31to60: buckets.d31_60,
+      days61to90: buckets.d61_90,
+      days90plus: buckets.d90p,
+      total:
+        buckets.current + buckets.d1_30 + buckets.d31_60 + buckets.d61_90 + buckets.d90p,
+    },
+    rows: rows.sort((a, b) => b.balance - a.balance),
+  };
+}
+
+export async function customerStatement(
+  companyId: string | null | undefined,
+  customerId: string,
+  from?: Date,
+  to?: Date
+) {
+  const cid = requireCompany(companyId);
+  const fromDate = from || startOfMonth(new Date());
+  const toDate = to || endOfDay(new Date());
+  const customer = await prisma.customer.findFirst({
+    where: { id: customerId, companyId: cid, deletedAt: null },
+  });
+  if (!customer) throw new NotFoundError('Customer');
+
+  const invoices = await prisma.invoice.findMany({
+    where: {
+      companyId: cid,
+      customerId,
+      deletedAt: null,
+      issuedAt: { gte: fromDate, lte: toDate },
+    },
+    orderBy: { issuedAt: 'asc' },
+    select: {
+      invoiceNo: true,
+      issuedAt: true,
+      dueDate: true,
+      total: true,
+      paidAmount: true,
+      status: true,
+    },
+  });
+
+  const payments = await prisma.payment.findMany({
+    where: {
+      companyId: cid,
+      invoice: { customerId },
+      paidAt: { gte: fromDate, lte: toDate },
+    },
+    orderBy: { paidAt: 'asc' },
+    select: {
+      amount: true,
+      paidAt: true,
+      method: true,
+      reference: true,
+      invoice: { select: { invoiceNo: true } },
+    },
+  });
+
+  return {
+    customer: {
+      id: customer.id,
+      code: customer.code,
+      name:
+        customer.businessName ||
+        `${customer.firstName || ''} ${customer.lastName || ''}`.trim(),
+      phone: customer.phone,
+      email: customer.email,
+      balance: Number(customer.balance),
+    },
+    from: fromDate,
+    to: toDate,
+    invoices: invoices.map((i) => ({
+      invoiceNo: i.invoiceNo,
+      issuedAt: i.issuedAt,
+      dueDate: i.dueDate,
+      status: i.status,
+      total: Number(i.total),
+      paidAmount: Number(i.paidAmount),
+      balance: Math.max(0, Number(i.total) - Number(i.paidAmount)),
+    })),
+    payments: payments.map((p) => ({
+      amount: Number(p.amount),
+      paidAt: p.paidAt,
+      method: p.method,
+      reference: p.reference,
+      invoiceNo: p.invoice?.invoiceNo,
+    })),
+  };
 }
 
 export async function exportSalesExcel(

@@ -27,17 +27,23 @@ function activeSaleFilter(companyId: string): Prisma.SaleWhereInput {
   };
 }
 
-export async function getDashboardStats(companyId: string | null | undefined) {
+export async function getDashboardStats(
+  companyId: string | null | undefined,
+  opts?: { from?: Date; to?: Date; branchId?: string }
+) {
   const cid = requireCompany(companyId);
   const now = new Date();
   const todayStart = startOfDay(now);
   const todayEnd = endOfDay(now);
   const weekStart = startOfWeek(now, { weekStartsOn: 1 });
   const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
-  const monthStart = startOfMonth(now);
-  const monthEnd = endOfMonth(now);
+  const monthStart = opts?.from ? startOfDay(opts.from) : startOfMonth(now);
+  const monthEnd = opts?.to ? endOfDay(opts.to) : endOfMonth(now);
 
-  const saleWhere = activeSaleFilter(cid);
+  const saleWhere: Prisma.SaleWhereInput = {
+    ...activeSaleFilter(cid),
+    ...(opts?.branchId ? { branchId: opts.branchId } : {}),
+  };
 
   const [
     salesToday,

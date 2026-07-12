@@ -472,7 +472,11 @@ export async function getSale(companyId: string | null | undefined, id: string) 
   const sale = await prisma.sale.findFirst({
     where: { id, companyId: cid },
     include: {
-      items: true,
+      items: {
+        include: {
+          product: { select: { id: true, name: true, sku: true, imageUrl: true } },
+        },
+      },
       payments: true,
       customer: true,
       cashier: { select: { id: true, firstName: true, lastName: true } },
@@ -654,7 +658,12 @@ export async function refundSale(
   companyId: string | null | undefined,
   userId: string,
   saleId: string,
-  input?: { reason?: string }
+  input?: {
+    reason?: string;
+    /** FULL (default) or PARTIAL line returns */
+    mode?: 'FULL' | 'PARTIAL';
+    items?: Array<{ saleItemId: string; quantity: number }>;
+  }
 ) {
   const cid = requireCompany(companyId);
   const sale = await prisma.sale.findFirst({
@@ -670,6 +679,95 @@ export async function refundSale(
   }
 
   const reason = input?.reason?.trim() || 'Customer return';
+  const mode = input?.mode || 'FULL';
+
+  // Partial: return selected line quantities only
+  if (mode === 'PARTIAL' && input?.items?.length) {
+    const itemMap = new Map(sale.items.map((it) => [it.id, it]));
+    const restoreLines: Array<{
+      productId: string;
+      quantity: number;
+      unitPrice: number;
+      productName?: string;
+    }> = [];
+    let refundTotal = 0;
+
+    for (const line of input.items) {
+      const src = itemMap.get(line.saleItemId);
+      if (!src) throw new ValidationError('Invalid sale line for partial refund');
+      const qty = Number(line.quantity);
+      const max = Number(src.quantity);
+      if (!Number.isFinite(qty) || qty <= 0 || qty > max) {
+        throw new ValidationError(`Invalid return qty for ${src.productName || src.productId}`);
+      }
+      const unit = Number(src.unitPrice);
+      const lineTotal = (qty / max) * Number(src.total);
+      refundTotal += lineTotal;
+      restoreLines.push({
+        productId: src.productId,
+        quantity: qty,
+        unitPrice: unit,
+        productName: src.productName,
+      });
+    }
+
+    refundTotal = roundMoney(refundTotal);
+
+    return prisma.$transaction(async (tx) => {
+      await restoreSaleInventory(
+        tx,
+        cid,
+        {
+          id: sale.id,
+          saleNo: sale.saleNo,
+          warehouseId: sale.warehouseId,
+          items: restoreLines,
+        },
+        userId,
+        `Partial refund: ${reason}`
+      );
+
+      const newPaid = Math.max(0, roundMoney(Number(sale.paidAmount) - refundTotal));
+      const newTotal = Math.max(0, roundMoney(Number(sale.total) - refundTotal));
+      const fullyReturned = input.items!.every((line) => {
+        const src = itemMap.get(line.saleItemId)!;
+        return Number(line.quantity) >= Number(src.quantity);
+      }) && input.items!.length >= sale.items.length;
+
+      if (sale.shiftId) {
+        await tx.shift.update({
+          where: { id: sale.shiftId },
+          data: {
+            totalRefunds: { increment: refundTotal },
+            totalSales: { decrement: refundTotal },
+          },
+        });
+      }
+
+      return tx.sale.update({
+        where: { id: saleId },
+        data: {
+          status: fullyReturned ? 'RETURNED' : sale.status,
+          paymentStatus: fullyReturned
+            ? 'REFUNDED'
+            : newPaid + 0.0001 < newTotal
+              ? 'PARTIAL'
+              : sale.paymentStatus,
+          paidAmount: newPaid,
+          total: newTotal,
+          notes: [sale.notes, `Partial refund ${refundTotal}: ${reason}`]
+            .filter(Boolean)
+            .join(' | '),
+        },
+        include: {
+          items: true,
+          payments: true,
+          customer: true,
+          cashier: { select: { id: true, firstName: true, lastName: true } },
+        },
+      });
+    });
+  }
 
   return prisma.$transaction(async (tx) => {
     await restoreSaleInventory(tx, cid, sale, userId, `Refund: ${reason}`);

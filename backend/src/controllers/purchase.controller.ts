@@ -29,3 +29,9 @@ export const receive = asyncHandler(async (req: Request, res: Response) => {
   );
   return success(res, data, 'Goods received');
 });
+
+export const updateStatus = asyncHandler(async (req: Request, res: Response) => {
+  const status = String(req.body?.status || '');
+  const data = await purchaseService.updatePurchaseStatus(req.companyId, req.params.id, status);
+  return success(res, data, `Purchase marked ${status}`);
+});

@@ -406,7 +406,7 @@ export function PosPage() {
         difference?: number;
       };
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       const exp = data?.expectedCash != null ? formatCurrency(Number(data.expectedCash)) : null;
       const diff =
         data?.difference != null ? formatCurrency(Number(data.difference)) : null;
@@ -415,6 +415,30 @@ export function PosPage() {
           .filter(Boolean)
           .join(' · ') || undefined,
       });
+      const closedId = (data as { id?: string })?.id || shift?.id;
+      if (closedId) {
+        try {
+          const { useAuthStore } = await import('@/stores/authStore');
+          const { getApiBaseUrl } = await import('@/lib/config');
+          const token = useAuthStore.getState().accessToken;
+          const res = await fetch(
+            `${getApiBaseUrl()}/sales/shifts/${closedId}/z-report.pdf`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          if (res.ok) {
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `z-report-${closedId.slice(0, 8)}.pdf`;
+            a.click();
+            URL.revokeObjectURL(url);
+            toast.message('Z-report PDF downloaded');
+          }
+        } catch {
+          /* optional */
+        }
+      }
       setShowCloseShift(false);
       setClosingCash('');
       setShiftNotes('');

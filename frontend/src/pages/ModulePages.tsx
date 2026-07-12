@@ -164,31 +164,65 @@ export function SalesPage() {
   const canReverseSales = canRefundOrDeleteSales(user?.roles || [], user?.permissions || []);
   const [printId, setPrintId] = useState<string | null>(null);
   const [autoPrint, setAutoPrint] = useState(false);
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [refundMode, setRefundMode] = useState<'FULL' | 'PARTIAL'>('FULL');
+  const [partialQty, setPartialQty] = useState<Record<string, string>>({});
+
   const { data, isLoading, refetch, isFetching } = useQuery({
-    queryKey: ['sales'],
-    queryFn: async () => (await api.get('/sales', { params: { limit: 50 } })).data,
+    queryKey: ['sales', search, status, from, to],
+    queryFn: async () =>
+      (
+        await api.get('/sales', {
+          params: {
+            limit: 50,
+            search: search || undefined,
+            status: status || undefined,
+            from: from || undefined,
+            to: to || undefined,
+          },
+        })
+      ).data,
     refetchOnWindowFocus: true,
     staleTime: 5_000,
   });
 
+  const { data: detail, isLoading: detailLoading } = useQuery({
+    queryKey: ['sale-detail', detailId],
+    enabled: !!detailId,
+    queryFn: async () => (await api.get(`/sales/${detailId}`)).data.data,
+  });
+
   const refund = useMutation({
-    mutationFn: async (id: string) =>
-      api.post(`/sales/${id}/refund`, { reason: 'Customer return' }),
+    mutationFn: async (payload: {
+      id: string;
+      mode?: 'FULL' | 'PARTIAL';
+      items?: Array<{ saleItemId: string; quantity: number }>;
+    }) =>
+      api.post(`/sales/${payload.id}/refund`, {
+        reason: payload.mode === 'PARTIAL' ? 'Partial return' : 'Customer return',
+        mode: payload.mode || 'FULL',
+        items: payload.items,
+      }),
     onSuccess: () => {
-      toast.success('Sale refunded â€” stock & totals updated');
+      toast.success('Sale refunded — stock & totals updated');
       invalidateAfterSaleChange(qc);
+      setDetailId(null);
       void refetch();
     },
     onError: (e) => toast.error(getErrorMessage(e)),
   });
 
   const remove = useMutation({
-    // POST /void is more reliable than DELETE on some mobile WebViews / proxies
     mutationFn: async (id: string) =>
-      api.post(`/sales/${id}/void`, { reason: 'Mistake â€” deleted by user' }),
+      api.post(`/sales/${id}/void`, { reason: 'Mistake — deleted by user' }),
     onSuccess: () => {
-      toast.success('Sale deleted â€” inventory restored');
+      toast.success('Sale deleted — inventory restored');
       invalidateAfterSaleChange(qc);
+      setDetailId(null);
       void refetch();
     },
     onError: (e) => toast.error(getErrorMessage(e) || 'Could not delete sale'),
@@ -201,8 +235,8 @@ export function SalesPage() {
       title="Sales"
       description={
         canReverseSales
-          ? 'POS transactions â€” refund, delete mistakes, print & share'
-          : 'POS transactions â€” print & share (refund/delete: managers only)'
+          ? 'Filter, open details, refund (full/partial), print & share'
+          : 'Filter & print receipts (refund/delete: managers only)'
       }
       action={
         <div className="flex gap-2">
@@ -231,16 +265,56 @@ export function SalesPage() {
           autoPrint={autoPrint}
         />
       )}
+
+      <Card>
+        <CardContent className="p-3 flex flex-wrap gap-2 items-end">
+          <div className="min-w-[8rem] flex-1">
+            <label className="text-[10px] text-muted-foreground">Search</label>
+            <Input
+              className="h-9"
+              placeholder="Sale # or customer"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-[10px] text-muted-foreground">From</label>
+            <Input className="h-9" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-[10px] text-muted-foreground">To</label>
+            <Input className="h-9" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-[10px] text-muted-foreground">Status</label>
+            <select
+              className="h-9 rounded-lg border border-input bg-background px-2 text-sm"
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+            >
+              <option value="">All</option>
+              <option value="CONFIRMED">Confirmed</option>
+              <option value="RETURNED">Returned</option>
+              <option value="CANCELLED">Cancelled</option>
+            </select>
+          </div>
+        </CardContent>
+      </Card>
+
       {isLoading ? (
-        <p className="text-muted-foreground">Loading salesâ€¦</p>
+        <div className="space-y-2">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="skeleton h-12 rounded-xl" />
+          ))}
+        </div>
       ) : rows.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center space-y-3">
-            <p className="text-muted-foreground">No sales recorded yet.</p>
+            <p className="text-muted-foreground">No sales match your filters.</p>
             <Link to="/app/pos">
               <Button>
                 <Plus className="h-4 w-4 mr-1" />
-                Open POS to record a sale
+                Open POS
               </Button>
             </Link>
           </CardContent>
@@ -264,9 +338,14 @@ export function SalesPage() {
                 s.paymentStatus !== 'REFUNDED' &&
                 s.paymentStatus !== 'VOID';
               return [
-                <span key="n" className="font-mono text-xs font-medium">
+                <button
+                  key="n"
+                  type="button"
+                  className="font-mono text-xs font-medium text-primary hover:underline"
+                  onClick={() => setDetailId(s.id)}
+                >
                   {s.saleNo}
-                </span>,
+                </button>,
                 s.customer?.businessName ||
                   `${s.customer?.firstName || ''} ${s.customer?.lastName || ''}`.trim() ||
                   'Walk-in',
@@ -283,15 +362,16 @@ export function SalesPage() {
                   >
                     {s.paymentStatus}
                   </Badge>
-                  {s.status === 'RETURNED' && <Badge variant="secondary">RETURNED</Badge>}
-                  {s.status === 'CANCELLED' && <Badge variant="secondary">CANCELLED</Badge>}
                 </div>,
                 formatDate(s.saleDate),
                 <div key="a" className="flex gap-1 flex-wrap items-center max-w-[280px]">
+                  <Button size="sm" variant="outline" onClick={() => setDetailId(s.id)}>
+                    Open
+                  </Button>
                   <Button
                     size="sm"
                     variant="outline"
-                    title="Print receipt"
+                    title="Print"
                     onClick={() => {
                       setAutoPrint(true);
                       setPrintId(s.id);
@@ -302,7 +382,6 @@ export function SalesPage() {
                   <Button
                     size="sm"
                     variant="secondary"
-                    title="Share receipt"
                     onClick={() => {
                       setAutoPrint(false);
                       setPrintId(s.id);
@@ -310,57 +389,190 @@ export function SalesPage() {
                   >
                     <Share2 className="h-3.5 w-3.5" />
                   </Button>
-                  {active && canReverseSales ? (
-                    <>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        title="Customer return â€” restore stock"
-                        loading={refund.isPending}
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              `Refund sale ${s.saleNo}? Stock will be put back and totals updated.`
-                            )
-                          ) {
-                            refund.mutate(s.id);
-                          }
-                        }}
-                      >
-                        Refund
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        title="Delete this sale (mistake) â€” restores stock"
-                        loading={remove.isPending}
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              `Delete sale ${s.saleNo}?\n\nUse this when you made a mistake.\nâ€¢ Stock is restored\nâ€¢ Sale is removed from the list`
-                            )
-                          ) {
-                            remove.mutate(s.id);
-                          }
-                        }}
-                      >
-                        Delete
-                      </Button>
-                    </>
-                  ) : active && !canReverseSales ? (
-                    <span className="text-[11px] text-muted-foreground px-1">View only</span>
-                  ) : (
-                    <span className="text-[11px] text-muted-foreground px-1">
-                      {s.status === 'RETURNED' || s.paymentStatus === 'REFUNDED'
-                        ? 'Refunded'
-                        : 'Closed'}
-                    </span>
+                  {active && canReverseSales && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      loading={refund.isPending}
+                      onClick={() => {
+                        if (window.confirm(`Full refund ${s.saleNo}?`)) {
+                          refund.mutate({ id: s.id, mode: 'FULL' });
+                        }
+                      }}
+                    >
+                      Refund
+                    </Button>
                   )}
                 </div>,
               ];
             }
           )}
         />
+      )}
+
+      {detailId && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/45 p-0 sm:p-4">
+          <div className="w-full sm:max-w-lg max-h-[90dvh] overflow-y-auto rounded-t-2xl sm:rounded-2xl border border-border bg-card shadow-elevated">
+            <div className="sticky top-0 flex items-center justify-between gap-2 border-b border-border bg-card px-4 py-3">
+              <h2 className="font-bold text-base">Sale detail</h2>
+              <Button size="sm" variant="ghost" onClick={() => setDetailId(null)}>
+                Close
+              </Button>
+            </div>
+            <div className="p-4 space-y-3">
+              {detailLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+              {detail && (
+                <>
+                  <div className="flex flex-wrap gap-2 text-sm">
+                    <Badge variant="secondary" className="font-mono">
+                      {detail.saleNo}
+                    </Badge>
+                    <Badge>{detail.paymentStatus}</Badge>
+                    <span className="text-muted-foreground text-xs">
+                      {detail.saleDate ? new Date(detail.saleDate).toLocaleString() : ''}
+                    </span>
+                  </div>
+                  <p className="text-lg font-bold tabular-nums">{formatCurrency(Number(detail.total))}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Customer:{' '}
+                    {detail.customer?.businessName ||
+                      `${detail.customer?.firstName || ''} ${detail.customer?.lastName || ''}`.trim() ||
+                      'Walk-in'}
+                    {detail.cashier
+                      ? ` · Cashier ${detail.cashier.firstName} ${detail.cashier.lastName}`
+                      : ''}
+                  </p>
+                  <div className="rounded-xl border border-border overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead className="bg-muted/50 text-left">
+                        <tr>
+                          <th className="p-2">Item</th>
+                          <th className="p-2 text-right">Qty</th>
+                          <th className="p-2 text-right">Total</th>
+                          {canReverseSales && refundMode === 'PARTIAL' && (
+                            <th className="p-2 text-right">Return</th>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(detail.items || []).map(
+                          (it: {
+                            id: string;
+                            productName: string;
+                            quantity: number;
+                            total: number;
+                          }) => (
+                            <tr key={it.id} className="border-t border-border/60">
+                              <td className="p-2">{it.productName}</td>
+                              <td className="p-2 text-right tabular-nums">{Number(it.quantity)}</td>
+                              <td className="p-2 text-right tabular-nums">
+                                {formatCurrency(Number(it.total))}
+                              </td>
+                              {canReverseSales && refundMode === 'PARTIAL' && (
+                                <td className="p-2 text-right">
+                                  <Input
+                                    className="h-8 w-16 ml-auto text-xs"
+                                    type="number"
+                                    min={0}
+                                    max={Number(it.quantity)}
+                                    value={partialQty[it.id] || ''}
+                                    onChange={(e) =>
+                                      setPartialQty((p) => ({ ...p, [it.id]: e.target.value }))
+                                    }
+                                  />
+                                </td>
+                              )}
+                            </tr>
+                          )
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setAutoPrint(true);
+                        setPrintId(detail.id);
+                      }}
+                    >
+                      <Printer className="h-3.5 w-3.5" /> Print
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        setAutoPrint(false);
+                        setPrintId(detail.id);
+                      }}
+                    >
+                      <Share2 className="h-3.5 w-3.5" /> Share
+                    </Button>
+                    {canReverseSales &&
+                      detail.status !== 'RETURNED' &&
+                      detail.paymentStatus !== 'REFUNDED' && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant={refundMode === 'FULL' ? 'default' : 'outline'}
+                            onClick={() => setRefundMode('FULL')}
+                          >
+                            Full refund
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant={refundMode === 'PARTIAL' ? 'default' : 'outline'}
+                            onClick={() => setRefundMode('PARTIAL')}
+                          >
+                            Partial
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            loading={refund.isPending}
+                            onClick={() => {
+                              if (refundMode === 'FULL') {
+                                if (window.confirm(`Full refund ${detail.saleNo}?`)) {
+                                  refund.mutate({ id: detail.id, mode: 'FULL' });
+                                }
+                                return;
+                              }
+                              const items = (detail.items || [])
+                                .map((it: { id: string; quantity: number }) => ({
+                                  saleItemId: it.id,
+                                  quantity: Number(partialQty[it.id] || 0),
+                                }))
+                                .filter((x: { quantity: number }) => x.quantity > 0);
+                              if (!items.length) {
+                                toast.error('Enter return quantities');
+                                return;
+                              }
+                              refund.mutate({ id: detail.id, mode: 'PARTIAL', items });
+                            }}
+                          >
+                            Confirm refund
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            loading={remove.isPending}
+                            onClick={() => {
+                              if (window.confirm(`Delete sale ${detail.saleNo}?`)) {
+                                remove.mutate(detail.id);
+                              }
+                            }}
+                          >
+                            Delete
+                          </Button>
+                        </>
+                      )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </PageShell>
   );
@@ -669,7 +881,94 @@ export function PurchasesPage() {
   );
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• INVENTORY â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+function StockTransferForm() {
+  const qc = useQueryClient();
+  const [fromWh, setFromWh] = useState('');
+  const [toWh, setToWh] = useState('');
+  const [productId, setProductId] = useState('');
+  const [qty, setQty] = useState('1');
+
+  const { data: warehouses } = useQuery({
+    queryKey: ['warehouses'],
+    queryFn: async () => (await api.get('/warehouses')).data,
+  });
+  const { data: products } = useQuery({
+    queryKey: ['products-mini'],
+    queryFn: async () => (await api.get('/products', { params: { limit: 100 } })).data,
+  });
+
+  const transfer = useMutation({
+    mutationFn: async () => {
+      const q = parseFloat(qty);
+      if (!fromWh || !toWh || !productId || !Number.isFinite(q) || q <= 0) {
+        throw new Error('Select warehouses, product, and quantity');
+      }
+      if (fromWh === toWh) throw new Error('Warehouses must differ');
+      return api.post('/stock/transfers', {
+        fromWarehouseId: fromWh,
+        toWarehouseId: toWh,
+        items: [{ productId, quantity: q }],
+      });
+    },
+    onSuccess: () => {
+      toast.success('Stock transferred');
+      qc.invalidateQueries({ queryKey: ['stock-levels'] });
+      qc.invalidateQueries({ queryKey: ['stock-movements'] });
+      setQty('1');
+    },
+    onError: (e) => toast.error(getErrorMessage(e)),
+  });
+
+  const wh = (warehouses?.data || []) as Array<{ id: string; name: string }>;
+  const prods = (products?.data || []) as Array<{ id: string; name: string }>;
+
+  return (
+    <div className="space-y-2">
+      <select
+        className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
+        value={fromWh}
+        onChange={(e) => setFromWh(e.target.value)}
+      >
+        <option value="">From warehouse</option>
+        {wh.map((w) => (
+          <option key={w.id} value={w.id}>
+            {w.name}
+          </option>
+        ))}
+      </select>
+      <select
+        className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
+        value={toWh}
+        onChange={(e) => setToWh(e.target.value)}
+      >
+        <option value="">To warehouse</option>
+        {wh.map((w) => (
+          <option key={w.id} value={w.id}>
+            {w.name}
+          </option>
+        ))}
+      </select>
+      <select
+        className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
+        value={productId}
+        onChange={(e) => setProductId(e.target.value)}
+      >
+        <option value="">Product</option>
+        {prods.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
+      </select>
+      <Input type="number" min={0} value={qty} onChange={(e) => setQty(e.target.value)} placeholder="Qty" />
+      <Button size="sm" loading={transfer.isPending} onClick={() => transfer.mutate()}>
+        Transfer stock
+      </Button>
+    </div>
+  );
+}
+
+// ════════════════════ INVENTORY ════════════════════
 export function InventoryPage() {
   const qc = useQueryClient();
   const [adjProduct, setAdjProduct] = useState('');
@@ -771,6 +1070,16 @@ export function InventoryPage() {
             </Button>
           </CardContent>
         </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Stock transfer</CardTitle>
+            <CardDescription>Move stock between warehouses</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <StockTransferForm />
+          </CardContent>
+        </Card>
+
         <Card id="low-stock">
           <CardHeader className="flex flex-row items-start justify-between gap-2">
             <div>
@@ -1971,10 +2280,74 @@ export function HrPage() {
 }
 
 // ════════════════════ REPORTS ════════════════════
-type ReportKind = 'sales' | 'inventory' | 'profit' | 'balances';
+type ReportKind = 'sales' | 'inventory' | 'profit' | 'balances' | 'aging';
 
 function ReportTable({ kind, data }: { kind: ReportKind; data: unknown }) {
   if (data == null) return null;
+
+  if (kind === 'aging') {
+    const d = data as {
+      buckets?: {
+        current: number;
+        days1to30: number;
+        days31to60: number;
+        days61to90: number;
+        days90plus: number;
+        total: number;
+      };
+      rows?: Array<{
+        invoiceNo: string;
+        customer: string;
+        balance: number;
+        daysPastDue: number;
+        bucket: string;
+      }>;
+    };
+    const b = d.buckets;
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {[
+            ['Current', b?.current],
+            ['1–30', b?.days1to30],
+            ['31–60', b?.days31to60],
+            ['61–90', b?.days61to90],
+            ['90+', b?.days90plus],
+            ['Total', b?.total],
+          ].map(([label, val]) => (
+            <div key={String(label)} className="rounded-xl border border-border p-3">
+              <p className="text-[10px] text-muted-foreground uppercase">{label}</p>
+              <p className="text-sm font-bold tabular-nums">{formatCurrency(Number(val || 0))}</p>
+            </div>
+          ))}
+        </div>
+        <div className="table-scroll rounded-xl border border-border max-h-[22rem] overflow-auto">
+          <table className="w-full text-xs">
+            <thead className="bg-muted/80 sticky top-0">
+              <tr className="text-left text-muted-foreground border-b">
+                <th className="p-2">Invoice</th>
+                <th className="p-2">Customer</th>
+                <th className="p-2 text-right">Days</th>
+                <th className="p-2 text-right">Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(d.rows || []).map((r, i) => (
+                <tr key={r.invoiceNo + i} className="border-b border-border/50 odd:bg-muted/20">
+                  <td className="p-2 font-mono">{r.invoiceNo}</td>
+                  <td className="p-2">{r.customer}</td>
+                  <td className="p-2 text-right">{r.daysPastDue}</td>
+                  <td className="p-2 text-right font-semibold">
+                    {formatCurrency(Number(r.balance))}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
 
   if (kind === 'sales') {
     const d = data as {
@@ -2311,6 +2684,13 @@ export function ReportsPage() {
       view: '/reports/customer-balances',
       pdf: '/reports/customer-balances.pdf',
     },
+    {
+      name: 'AR Aging',
+      desc: '0–30 / 31–60 / 90+ buckets',
+      kind: 'aging',
+      view: '/reports/ar-aging',
+      pdf: '/reports/ar-aging.pdf',
+    },
   ];
 
   const [preview, setPreview] = useState<unknown>(null);
@@ -2318,15 +2698,25 @@ export function ReportsPage() {
   const [previewKind, setPreviewKind] = useState<ReportKind | null>(null);
   const [previewPdf, setPreviewPdf] = useState<string | null>(null);
   const [loadingView, setLoadingView] = useState(false);
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+
+  const withDates = (path: string) => {
+    const q = new URLSearchParams();
+    if (from) q.set('from', from);
+    if (to) q.set('to', to);
+    const qs = q.toString();
+    return qs ? `${path}?${qs}` : path;
+  };
 
   const loadPreview = async (path: string, title: string, kind: ReportKind, pdf: string) => {
     setLoadingView(true);
     try {
-      const res = await api.get(path);
+      const res = await api.get(withDates(path));
       setPreview(res.data.data);
       setPreviewTitle(title);
       setPreviewKind(kind);
-      setPreviewPdf(pdf);
+      setPreviewPdf(withDates(pdf));
     } catch (e) {
       toast.error(getErrorMessage(e));
     } finally {
@@ -2336,6 +2726,21 @@ export function ReportsPage() {
 
   return (
     <PageShell title="Reports" description="Live reports — table view, PDF, Excel, CSV">
+      <Card>
+        <CardContent className="p-3 flex flex-wrap gap-2 items-end">
+          <div>
+            <label className="text-[10px] text-muted-foreground">From</label>
+            <Input type="date" className="h-9" value={from} onChange={(e) => setFrom(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-[10px] text-muted-foreground">To</label>
+            <Input type="date" className="h-9" value={to} onChange={(e) => setTo(e.target.value)} />
+          </div>
+          <p className="text-[11px] text-muted-foreground pb-2">
+            Applied to sales, profit & PDF downloads
+          </p>
+        </CardContent>
+      </Card>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {reports.map((r) => (
           <Card key={r.name} className="hover:border-primary/50 transition-colors">
@@ -2356,7 +2761,10 @@ export function ReportsPage() {
                 size="sm"
                 variant="default"
                 onClick={() =>
-                  downloadAuth(r.pdf, `${r.name.replace(/\s+/g, '-').toLowerCase()}.pdf`)
+                  downloadAuth(
+                    withDates(r.pdf),
+                    `${r.name.replace(/\s+/g, '-').toLowerCase()}.pdf`
+                  )
                     .then(() => toast.success('PDF downloaded'))
                     .catch((e) => toast.error(getErrorMessage(e)))
                 }

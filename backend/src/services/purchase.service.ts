@@ -157,6 +157,39 @@ export async function createPurchase(
   });
 }
 
+export async function updatePurchaseStatus(
+  companyId: string | null | undefined,
+  id: string,
+  status: string
+) {
+  const cid = requireCompany(companyId);
+  const po = await prisma.purchaseOrder.findFirst({
+    where: { id, companyId: cid, deletedAt: null },
+  });
+  if (!po) throw new NotFoundError('Purchase order');
+  const allowed: Record<string, string[]> = {
+    DRAFT: ['APPROVED', 'ORDERED', 'CANCELLED'],
+    PENDING_APPROVAL: ['APPROVED', 'ORDERED', 'CANCELLED'],
+    APPROVED: ['ORDERED', 'CANCELLED'],
+    ORDERED: ['CANCELLED'],
+    PARTIALLY_RECEIVED: ['CANCELLED', 'CLOSED'],
+    RECEIVED: ['CLOSED'],
+  };
+  const next = status.toUpperCase();
+  const from = po.status;
+  if (!(allowed[from] || []).includes(next) && from !== next) {
+    throw new ValidationError(`Cannot change status from ${from} to ${next}`);
+  }
+  return prisma.purchaseOrder.update({
+    where: { id },
+    data: {
+      status: next as never,
+      orderedAt: next === 'ORDERED' || next === 'APPROVED' ? new Date() : po.orderedAt,
+    },
+    include: { items: true, supplier: true },
+  });
+}
+
 export async function receivePurchase(
   companyId: string | null | undefined,
   purchaseId: string,

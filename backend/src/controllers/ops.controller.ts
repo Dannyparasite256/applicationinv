@@ -204,6 +204,45 @@ export const customerBalancesPdf = asyncHandler(async (req: Request, res: Respon
   return res.send(buf);
 });
 
+export const arAgingReport = asyncHandler(async (req: Request, res: Response) => {
+  return success(res, await reportService.arAgingReport(req.companyId));
+});
+
+export const arAgingPdf = asyncHandler(async (req: Request, res: Response) => {
+  const { arAgingPdf: build } = await import('../services/reportPdf.service');
+  const buf = await build(req.companyId);
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', 'attachment; filename="ar-aging.pdf"');
+  return res.send(buf);
+});
+
+export const customerStatement = asyncHandler(async (req: Request, res: Response) => {
+  const from = req.query.from ? new Date(String(req.query.from)) : undefined;
+  const to = req.query.to ? new Date(String(req.query.to)) : undefined;
+  return success(
+    res,
+    await reportService.customerStatement(req.companyId, req.params.id, from, to)
+  );
+});
+
+export const customerStatementPdf = asyncHandler(async (req: Request, res: Response) => {
+  const from = req.query.from ? new Date(String(req.query.from)) : undefined;
+  const to = req.query.to ? new Date(String(req.query.to)) : undefined;
+  const { customerStatementPdf: build } = await import('../services/reportPdf.service');
+  const buf = await build(req.companyId, req.params.id, from, to);
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', 'attachment; filename="customer-statement.pdf"');
+  return res.send(buf);
+});
+
+export const purchaseOrderPdf = asyncHandler(async (req: Request, res: Response) => {
+  const { purchaseOrderPdf: build } = await import('../services/reportPdf.service');
+  const buf = await build(req.companyId, req.params.id);
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="po-${req.params.id.slice(0, 8)}.pdf"`);
+  return res.send(buf);
+});
+
 // ── PDF receipt (legacy + enhanced) ───────────────────────
 function queryCurrency(req: { query: Record<string, unknown> }): string | undefined {
   const c = req.query.currency;
