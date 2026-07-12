@@ -87,6 +87,10 @@ export function PlatformBusinessesPage() {
   );
 
   const openBusiness = (id: string, tab?: 'passwords' | 'sales') => {
+    if (tab === 'sales') {
+      navigate(`/app/platform/businesses/${id}/sales`);
+      return;
+    }
     navigate(`/app/platform/businesses/${id}${tab ? `?tab=${tab}` : ''}`);
   };
 
@@ -171,7 +175,7 @@ export function PlatformBusinessesPage() {
         <CardHeader className="pb-2">
           <CardTitle className="text-base">All businesses</CardTitle>
           <CardDescription>
-            Showing {companies.length} of {formatNumber(total)} · tap a row to open & edit
+            Showing {companies.length} of {formatNumber(total)} · Open for details · Sales for that business’s sales
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">

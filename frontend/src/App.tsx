@@ -31,6 +31,7 @@ import { AddStaffPage } from '@/pages/settings/AddStaffPage';
 import { PlatformAdminPage } from '@/pages/admin/PlatformAdminPage';
 import { PlatformBusinessesPage } from '@/pages/admin/PlatformBusinessesPage';
 import { PlatformBusinessDetailPage } from '@/pages/admin/PlatformBusinessDetailPage';
+import { PlatformBusinessSalesPage } from '@/pages/admin/PlatformBusinessSalesPage';
 import { StaffPage } from '@/pages/admin/StaffPage';
 import { SyncCenterPage } from '@/pages/SyncCenterPage';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
@@ -123,6 +124,7 @@ export default function App() {
               <Route index element={<Guard><DashboardPage /></Guard>} />
               <Route path="platform" element={<Guard><PlatformAdminPage /></Guard>} />
               <Route path="platform/businesses" element={<Guard><PlatformBusinessesPage /></Guard>} />
+              <Route path="platform/businesses/:id/sales" element={<Guard><PlatformBusinessSalesPage /></Guard>} />
               <Route path="platform/businesses/:id" element={<Guard><PlatformBusinessDetailPage /></Guard>} />
               <Route path="staff" element={<Guard><StaffPage /></Guard>} />
               <Route path="pos" element={<Guard><PosPage /></Guard>} />
