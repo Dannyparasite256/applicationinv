@@ -3,11 +3,14 @@ import { env } from './config/env';
 import { connectDatabase, disconnectDatabase } from './config/database';
 import { connectRedis, disconnectRedis } from './config/redis';
 import { initEmailOnBoot } from './services/email.service';
+import { ensurePlatformBootstrap } from './services/platformBootstrap.service';
 import { logger } from './utils/logger';
 
 async function bootstrap() {
   await connectDatabase();
   await connectRedis();
+  // Create superadmin + core RBAC if this DB was never seeded (Render migrate-only)
+  await ensurePlatformBootstrap();
   initEmailOnBoot();
 
   const app = createApp();

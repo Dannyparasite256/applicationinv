@@ -160,6 +160,26 @@ export async function fetchLiveRates(base: string): Promise<{
   throw new ValidationError('Unable to fetch live exchange rates. Check internet and try again.');
 }
 
+/** Popular currencies always available in the company picker (rates filled by refresh). */
+const DEFAULT_SEED_CODES = [
+  'USD',
+  'EUR',
+  'GBP',
+  'KES',
+  'UGX',
+  'TZS',
+  'NGN',
+  'ZAR',
+  'GHS',
+  'RWF',
+  'INR',
+  'AED',
+  'CNY',
+  'JPY',
+  'CAD',
+  'AUD',
+];
+
 /** Ensure company has base currency + popular set (no recursive list call). */
 export async function ensureCompanyCurrencies(companyId: string) {
   const company = await prisma.company.findUnique({
@@ -169,41 +189,28 @@ export async function ensureCompanyCurrencies(companyId: string) {
   if (!company) throw new NotFoundError('Company');
   const base = (company.currency || 'USD').toUpperCase();
 
-  const existing = await prisma.currency.findMany({ where: { companyId } });
-  if (!existing.length) {
-    const seedCodes = [
-      base,
-      'USD',
-      'EUR',
-      'GBP',
-      'KES',
-      'UGX',
-      'TZS',
-      'NGN',
-      'ZAR',
-      'INR',
-      'AED',
-      'CNY',
-    ];
-    const unique = [...new Set(seedCodes.map((c) => c.toUpperCase()))];
-    // Concurrent first-load can race; upsert one-by-one is safer than createMany alone
-    for (const code of unique) {
-      const m = meta(code);
-      await prisma.currency.upsert({
-        where: { companyId_code: { companyId, code } },
-        create: {
-          companyId,
-          code,
-          name: m.name,
-          symbol: m.symbol,
-          exchangeRate: 1,
-          isBase: code === base,
-          isActive: true,
-        },
-        update: {},
-      });
-    }
-    // fall through so base flag is corrected
+  // Always upsert popular set — not only when empty (fixes companies stuck with only USD)
+  const unique = [...new Set([base, ...DEFAULT_SEED_CODES].map((c) => c.toUpperCase()))];
+  for (const code of unique) {
+    const m = meta(code);
+    await prisma.currency.upsert({
+      where: { companyId_code: { companyId, code } },
+      create: {
+        companyId,
+        code,
+        name: m.name,
+        symbol: m.symbol,
+        exchangeRate: code === base ? 1 : 1,
+        isBase: code === base,
+        isActive: true,
+      },
+      // Re-activate rows that were accidentally deactivated; never wipe live rates
+      update: {
+        isActive: true,
+        name: m.name,
+        symbol: m.symbol,
+      },
+    });
   }
 
   // Ensure exactly one base matches company.currency
