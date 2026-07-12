@@ -5,7 +5,7 @@
 # Creates:
 #   1) eims-postgres  (free Postgres — expires after ~30 days on free)
 #   2) eims-api       (free Node web service)
-#   3) eims-web       (free static site)
+#   3) eims-web       (static site — always free; do NOT set plan/region)
 #
 # IMPORTANT after first successful deploy (manual in Render dashboard):
 #   1. Open eims-api → copy its URL (e.g. https://eims-api-xxxx.onrender.com)
@@ -34,9 +34,7 @@ services:
     runtime: node
     plan: free
     region: oregon
-    # Install build tools (tsc/prisma live in devDependencies), generate client, compile
     buildCommand: npm install --include=dev && npm run db:generate -w backend && npm run build -w backend
-    # Migrate then start (keep migrate in start for free-tier reliability)
     startCommand: npm run db:migrate:deploy -w backend && npm run start -w backend
     healthCheckPath: /api/v1/health
     envVars:
@@ -44,14 +42,12 @@ services:
         value: "20"
       - key: NODE_ENV
         value: production
-      # Do NOT set PORT — Render injects it automatically
       - key: API_PREFIX
         value: /api/v1
       - key: DATABASE_URL
         fromDatabase:
           name: eims-postgres
           property: connectionString
-      # Redis not required on free tier (app falls back to in-memory)
       - key: REDIS_URL
         value: redis://127.0.0.1:6379
       - key: JWT_ACCESS_SECRET
@@ -68,7 +64,6 @@ services:
         value: "false"
       - key: OAUTH_GOOGLE_ENABLED
         value: "false"
-      # Allow browser calls until you lock CORS to the real web URL
       - key: CORS_ORIGINS
         value: "*"
       - key: APP_URL
@@ -81,10 +76,10 @@ services:
         value: "200"
 
   # ---------------- Frontend (static Vite build) ----------------
+  # NOTE: static sites must NOT include plan/region (schema rejects them)
   - type: web
     name: eims-web
     runtime: static
-    plan: free
     buildCommand: npm install --include=dev && npm run build -w frontend
     staticPublishPath: frontend/dist
     headers:
@@ -98,6 +93,5 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "20"
-      # Baked in at build time — update to the real API URL after first API deploy, then rebuild web
       - key: VITE_API_URL
         value: https://eims-api.onrender.com/api/v1
