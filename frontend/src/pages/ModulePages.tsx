@@ -583,7 +583,13 @@ export function SalesPage() {
 
 // ════════════════════ CUSTOMERS ════════════════════
 export function CustomersPage() {
-  const [form, setForm] = useState({ firstName: '', lastName: '', phone: '', email: '' });
+  const [form, setForm] = useState({
+    firstName: '',
+    lastName: '',
+    phone: '',
+    email: '',
+    creditLimit: '',
+  });
   const [show, setShow] = useState(false);
   const [pickingContact, setPickingContact] = useState(false);
   const qc = useQueryClient();
@@ -600,6 +606,7 @@ export function CustomersPage() {
         lastName: form.lastName.trim() || null,
         phone: form.phone.trim() || null,
         email: form.email.trim() || null,
+        creditLimit: form.creditLimit ? parseFloat(form.creditLimit) : 0,
       };
       if (!payload.firstName && !payload.lastName && !payload.phone && !payload.email) {
         throw new Error('Enter a name, phone, or email');
@@ -609,7 +616,7 @@ export function CustomersPage() {
     onSuccess: () => {
       toast.success('Customer created');
       setShow(false);
-      setForm({ firstName: '', lastName: '', phone: '', email: '' });
+      setForm({ firstName: '', lastName: '', phone: '', email: '', creditLimit: '' });
       qc.invalidateQueries({ queryKey: ['customers'] });
     },
     onError: (e) => toast.error(getErrorMessage(e)),
@@ -668,7 +675,7 @@ export function CustomersPage() {
                 </p>
               </div>
             )}
-            <div className="grid gap-3 sm:grid-cols-5">
+            <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
               <Input
                 placeholder="First name"
                 value={form.firstName}
@@ -679,7 +686,7 @@ export function CustomersPage() {
                 value={form.lastName}
                 onChange={(e) => setForm({ ...form, lastName: e.target.value })}
               />
-              <div className="flex gap-1.5 sm:col-span-1">
+              <div className="flex gap-1.5">
                 <Input
                   className="flex-1 min-w-0"
                   placeholder="Phone"
@@ -709,6 +716,13 @@ export function CustomersPage() {
                 inputMode="email"
                 autoComplete="email"
               />
+              <Input
+                type="number"
+                min={0}
+                placeholder="Credit limit (0 = none)"
+                value={form.creditLimit}
+                onChange={(e) => setForm({ ...form, creditLimit: e.target.value })}
+              />
               <Button onClick={() => create.mutate()} loading={create.isPending}>
                 Save
               </Button>
@@ -717,7 +731,7 @@ export function CustomersPage() {
         </Card>
       )}
       <DataTable
-        columns={['Code', 'Name', 'Phone', 'Email', 'Balance', 'Points']}
+        columns={['Code', 'Name', 'Phone', 'Email', 'Balance', 'Credit limit', 'Points']}
         rows={(data?.data || []).map(
           (c: {
             code: string;
@@ -727,21 +741,34 @@ export function CustomersPage() {
             phone?: string;
             email?: string;
             balance: number;
+            creditLimit?: number;
             loyaltyPoints: number;
           }) => {
             const name =
               c.businessName || `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Customer';
+            const bal = Number(c.balance || 0);
+            const limit = Number(c.creditLimit || 0);
             return [
               c.code,
               name,
               <PhoneActions
                 key={`phone-${c.code}`}
                 phone={c.phone}
-                messageBody={`Hi ${name}, `}
+                messageBody={
+                  bal > 0
+                    ? `Hi ${name}, reminder: your outstanding balance is ${formatCurrency(bal)}. `
+                    : `Hi ${name}, `
+                }
               />,
               c.email || '—',
-              formatCurrency(Number(c.balance)),
-              String(c.loyaltyPoints),
+              <span
+                key="bal"
+                className={bal > 0 ? 'font-semibold text-warning' : undefined}
+              >
+                {formatCurrency(bal)}
+              </span>,
+              limit > 0 ? formatCurrency(limit) : '—',
+              String(c.loyaltyPoints ?? 0),
             ];
           }
         )}
@@ -2288,6 +2315,13 @@ export function LaboratoryPage() {
 }
 
 export function AccountingPage() {
+  const qc = useQueryClient();
+  const [expForm, setExpForm] = useState({
+    category: 'other',
+    description: '',
+    amount: '',
+    expenseDate: new Date().toISOString().slice(0, 10),
+  });
   const { data } = useQuery({
     queryKey: ['accounts'],
     queryFn: async () => (await api.get('/accounts')).data,
@@ -2296,42 +2330,157 @@ export function AccountingPage() {
     queryKey: ['profit-report'],
     queryFn: async () => (await api.get('/reports/profit')).data.data,
   });
+  const { data: expenses } = useQuery({
+    queryKey: ['expenses'],
+    queryFn: async () => (await api.get('/expenses')).data.data as {
+      total: number;
+      rows: Array<{
+        id: string;
+        category: string;
+        description?: string;
+        amount: number;
+        expenseDate: string;
+      }>;
+    },
+  });
+  const addExpense = useMutation({
+    mutationFn: async () => {
+      const amount = parseFloat(expForm.amount);
+      if (!Number.isFinite(amount) || amount <= 0) throw new Error('Enter a valid amount');
+      return api.post('/expenses', {
+        category: expForm.category,
+        description: expForm.description || null,
+        amount,
+        expenseDate: expForm.expenseDate,
+      });
+    },
+    onSuccess: () => {
+      toast.success('Expense recorded');
+      setExpForm((f) => ({ ...f, description: '', amount: '' }));
+      qc.invalidateQueries({ queryKey: ['expenses'] });
+      qc.invalidateQueries({ queryKey: ['profit-report'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+    onError: (e) => toast.error(getErrorMessage(e)),
+  });
+  const delExpense = useMutation({
+    mutationFn: async (id: string) => api.delete(`/expenses/${id}`),
+    onSuccess: () => {
+      toast.success('Expense removed');
+      qc.invalidateQueries({ queryKey: ['expenses'] });
+      qc.invalidateQueries({ queryKey: ['profit-report'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+    onError: (e) => toast.error(getErrorMessage(e)),
+  });
 
   return (
-    <PageShell title="Accounting" description="Chart of accounts & profit snapshot">
+    <PageShell title="Accounting" description="P&L, expenses, and chart of accounts">
       {profit && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
           {[
             { label: 'Gross sales', value: profit.revenue },
             { label: 'Net sales', value: profit.netRevenue ?? profit.revenue },
             { label: 'COGS', value: profit.cogs },
             { label: 'Gross Profit', value: profit.grossProfit },
-            { label: 'Margin %', value: profit.grossMargin, isPct: true },
+            { label: 'Expenses', value: profit.expenses ?? expenses?.total ?? 0 },
+            { label: 'Net Profit', value: profit.netProfit ?? profit.grossProfit, emphasis: true },
+            { label: 'Net margin %', value: profit.netMargin ?? profit.grossMargin, isPct: true },
           ].map((k) => (
-            <Card key={k.label}>
+            <Card key={k.label} className={'emphasis' in k && k.emphasis ? 'border-primary/40 bg-primary/5' : ''}>
               <CardContent className="pt-5">
                 <p className="text-sm text-muted-foreground">{k.label}</p>
                 <p className="text-xl font-bold tabular-nums">
-                  {k.isPct ? `${Number(k.value).toFixed(1)}%` : formatCurrency(Number(k.value))}
+                  {k.isPct ? `${Number(k.value || 0).toFixed(1)}%` : formatCurrency(Number(k.value || 0))}
                 </p>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Record expense</CardTitle>
+          <CardDescription>Rent, salaries, utilities — deducted from gross profit for net profit</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-5">
+          <select
+            className="h-10 rounded-lg border border-input bg-background px-3 text-sm"
+            value={expForm.category}
+            onChange={(e) => setExpForm({ ...expForm, category: e.target.value })}
+          >
+            {['rent', 'salaries', 'utilities', 'transport', 'supplies', 'marketing', 'maintenance', 'taxes_fees', 'other'].map(
+              (c) => (
+                <option key={c} value={c}>
+                  {c.replace('_', ' ')}
+                </option>
+              )
+            )}
+          </select>
+          <Input
+            placeholder="Description"
+            value={expForm.description}
+            onChange={(e) => setExpForm({ ...expForm, description: e.target.value })}
+          />
+          <Input
+            type="number"
+            placeholder="Amount"
+            value={expForm.amount}
+            onChange={(e) => setExpForm({ ...expForm, amount: e.target.value })}
+          />
+          <Input
+            type="date"
+            value={expForm.expenseDate}
+            onChange={(e) => setExpForm({ ...expForm, expenseDate: e.target.value })}
+          />
+          <Button loading={addExpense.isPending} onClick={() => addExpense.mutate()}>
+            Add expense
+          </Button>
+        </CardContent>
+      </Card>
+
       <DataTable
-        columns={['Code', 'Name', 'Type', 'Balance']}
-        rows={(data?.data || []).map((a: { code: string; name: string; type: string; balance: number }) => [
-          <span key="c" className="font-mono text-xs">
-            {a.code}
-          </span>,
-          a.name,
-          <Badge key="t" variant="outline">
-            {a.type}
-          </Badge>,
-          formatCurrency(Number(a.balance)),
+        columns={['Date', 'Category', 'Description', 'Amount', '']}
+        rows={(expenses?.rows || []).map((r) => [
+          formatDate(r.expenseDate),
+          r.category,
+          r.description || '—',
+          formatCurrency(Number(r.amount)),
+          <Button
+            key="d"
+            size="sm"
+            variant="ghost"
+            className="text-destructive"
+            onClick={() => {
+              if (window.confirm('Delete this expense?')) delExpense.mutate(r.id);
+            }}
+          >
+            Delete
+          </Button>,
         ])}
       />
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Chart of accounts</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <DataTable
+            columns={['Code', 'Name', 'Type', 'Balance']}
+            rows={(data?.data || []).map((a: { code: string; name: string; type: string; balance: number }) => [
+              <span key="c" className="font-mono text-xs">
+                {a.code}
+              </span>,
+              a.name,
+              <Badge key="t" variant="outline">
+                {a.type}
+              </Badge>,
+              formatCurrency(Number(a.balance)),
+            ])}
+          />
+        </CardContent>
+      </Card>
     </PageShell>
   );
 }
@@ -2382,7 +2531,7 @@ export function HrPage() {
 }
 
 // ════════════════════ REPORTS ════════════════════
-type ReportKind = 'sales' | 'inventory' | 'profit' | 'balances' | 'aging';
+type ReportKind = 'sales' | 'inventory' | 'profit' | 'product-profit' | 'balances' | 'aging';
 
 function ReportTable({ kind, data }: { kind: ReportKind; data: unknown }) {
   if (data == null) return null;
@@ -2635,6 +2784,69 @@ function ReportTable({ kind, data }: { kind: ReportKind; data: unknown }) {
     );
   }
 
+  if (kind === 'product-profit') {
+    const d = data as {
+      from?: string;
+      to?: string;
+      rows?: Array<{
+        name: string;
+        sku: string;
+        quantity: number;
+        revenue: number;
+        cogs: number;
+        profit: number;
+        margin: number;
+      }>;
+      totals?: { revenue: number; cogs: number; profit: number };
+    };
+    return (
+      <div className="space-y-3">
+        <p className="text-xs text-muted-foreground">
+          {d.from ? new Date(d.from).toLocaleDateString() : '—'} –{' '}
+          {d.to ? new Date(d.to).toLocaleDateString() : '—'}
+          {d.totals
+            ? ` · Total profit ${formatCurrency(d.totals.profit)}`
+            : ''}
+        </p>
+        <div className="table-scroll rounded-xl border border-border max-h-[28rem] overflow-auto">
+          <table className="w-full text-xs">
+            <thead className="sticky top-0 bg-muted/95">
+              <tr className="text-left text-muted-foreground border-b">
+                <th className="p-2.5">Product</th>
+                <th className="p-2.5">SKU</th>
+                <th className="p-2.5 text-right">Qty</th>
+                <th className="p-2.5 text-right">Revenue</th>
+                <th className="p-2.5 text-right">COGS</th>
+                <th className="p-2.5 text-right">Profit</th>
+                <th className="p-2.5 text-right">Margin</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(d.rows || []).map((r) => (
+                <tr key={r.sku + r.name} className="border-b border-border/50 odd:bg-muted/20">
+                  <td className="p-2.5 font-medium">{r.name}</td>
+                  <td className="p-2.5 font-mono text-muted-foreground">{r.sku}</td>
+                  <td className="p-2.5 text-right tabular-nums">{r.quantity}</td>
+                  <td className="p-2.5 text-right tabular-nums">{formatCurrency(r.revenue)}</td>
+                  <td className="p-2.5 text-right tabular-nums">{formatCurrency(r.cogs)}</td>
+                  <td className="p-2.5 text-right tabular-nums font-semibold">{formatCurrency(r.profit)}</td>
+                  <td className="p-2.5 text-right tabular-nums">{r.margin.toFixed(1)}%</td>
+                </tr>
+              ))}
+              {!d.rows?.length && (
+                <tr>
+                  <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                    No product sales in this period
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
   if (kind === 'profit') {
     const d = data as {
       from?: string;
@@ -2645,6 +2857,9 @@ function ReportTable({ kind, data }: { kind: ReportKind; data: unknown }) {
       cogs?: number;
       grossProfit?: number;
       grossMargin?: number;
+      expenses?: number;
+      netProfit?: number;
+      netMargin?: number;
       purchases?: number;
     };
     const lines = [
@@ -2652,7 +2867,9 @@ function ReportTable({ kind, data }: { kind: ReportKind; data: unknown }) {
       { label: 'Tax collected', value: d.tax },
       { label: 'Net sales (ex-tax)', value: d.netRevenue ?? d.revenue },
       { label: 'Cost of goods sold', value: d.cogs },
-      { label: 'Gross profit', value: d.grossProfit, emphasis: true },
+      { label: 'Gross profit', value: d.grossProfit },
+      { label: 'Operating expenses', value: d.expenses },
+      { label: 'Net profit', value: d.netProfit ?? d.grossProfit, emphasis: true },
       { label: 'Purchases (period, reference)', value: d.purchases },
     ];
     return (
@@ -2660,8 +2877,12 @@ function ReportTable({ kind, data }: { kind: ReportKind; data: unknown }) {
         <p className="text-xs text-muted-foreground">
           {d.from ? new Date(d.from).toLocaleDateString() : '—'} –{' '}
           {d.to ? new Date(d.to).toLocaleDateString() : '—'}
-          {d.grossMargin != null ? ` · Margin ${Number(d.grossMargin).toFixed(1)}% on net sales` : ''}
-          {' · Gross profit = net sales − COGS'}
+          {d.netMargin != null
+            ? ` · Net margin ${Number(d.netMargin).toFixed(1)}%`
+            : d.grossMargin != null
+              ? ` · Gross margin ${Number(d.grossMargin).toFixed(1)}%`
+              : ''}
+          {' · Net profit = gross profit − expenses'}
         </p>
         <div className="table-scroll rounded-xl border border-border overflow-auto">
           <table className="w-full text-sm">
@@ -2781,9 +3002,16 @@ export function ReportsPage() {
     },
     {
       name: 'Profit & Loss',
-      desc: 'Revenue, COGS, margin',
+      desc: 'Revenue, COGS, expenses, net profit',
       kind: 'profit',
       view: '/reports/profit',
+      pdf: '/reports/profit.pdf',
+    },
+    {
+      name: 'Product Profit',
+      desc: 'Margin by SKU',
+      kind: 'product-profit',
+      view: '/reports/product-profit',
       pdf: '/reports/profit.pdf',
     },
     {
@@ -2834,7 +3062,7 @@ export function ReportsPage() {
   };
 
   return (
-    <PageShell title="Reports" description="Live reports — table view, PDF, Excel, CSV">
+    <PageShell title="Reports" description="Live reports — table view, PDF, Excel, CSV & backup">
       <Card>
         <CardContent className="p-3 flex flex-wrap gap-2 items-end">
           <div>
@@ -2848,6 +3076,52 @@ export function ReportsPage() {
           <p className="text-[11px] text-muted-foreground pb-2">
             Applied to sales, profit & PDF downloads
           </p>
+          <div className="flex flex-wrap gap-2 w-full sm:w-auto sm:ml-auto pb-1">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() =>
+                downloadAuth('/reports/customers.csv', 'customers.csv')
+                  .then(() => toast.success('Customers CSV downloaded'))
+                  .catch((e) => toast.error(getErrorMessage(e)))
+              }
+            >
+              <Download className="h-3.5 w-3.5" /> Customers
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() =>
+                downloadAuth('/reports/products.csv', 'products.csv')
+                  .then(() => toast.success('Products CSV downloaded'))
+                  .catch((e) => toast.error(getErrorMessage(e)))
+              }
+            >
+              <Download className="h-3.5 w-3.5" /> Products
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() =>
+                downloadAuth(withDates('/reports/expenses.csv'), 'expenses.csv')
+                  .then(() => toast.success('Expenses CSV downloaded'))
+                  .catch((e) => toast.error(getErrorMessage(e)))
+              }
+            >
+              <Download className="h-3.5 w-3.5" /> Expenses
+            </Button>
+            <Button
+              size="sm"
+              variant="default"
+              onClick={() =>
+                downloadAuth('/reports/backup.txt', 'ims-backup.txt')
+                  .then(() => toast.success('Full backup downloaded'))
+                  .catch((e) => toast.error(getErrorMessage(e)))
+              }
+            >
+              <Download className="h-3.5 w-3.5" /> Full backup
+            </Button>
+          </div>
         </CardContent>
       </Card>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

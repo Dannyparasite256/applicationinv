@@ -31,6 +31,12 @@ export type ProfitBreakdown = {
   grossProfit: number;
   /** Gross margin % on net revenue */
   grossMargin: number;
+  /** Operating expenses in period */
+  expenses: number;
+  /** Net profit = grossProfit − expenses */
+  netProfit: number;
+  /** Net margin % on net revenue */
+  netMargin: number;
   /** Purchase order totals in period (reference only; not deducted from gross profit) */
   purchases: number;
   saleCount: number;
@@ -61,7 +67,7 @@ export async function calculateProfit(
     ...(opts?.branchId ? { branchId: opts.branchId } : {}),
   };
 
-  const [salesAgg, saleItems, purchases] = await Promise.all([
+  const [salesAgg, saleItems, purchases, expenseAgg] = await Promise.all([
     prisma.sale.aggregate({
       where: saleWhere,
       _sum: {
@@ -89,6 +95,14 @@ export async function calculateProfit(
       },
       _sum: { total: true },
     }),
+    prisma.expense.aggregate({
+      where: {
+        companyId,
+        deletedAt: null,
+        expenseDate: { gte: fromDate, lte: toDate },
+      },
+      _sum: { amount: true },
+    }),
   ]);
 
   const revenue = roundMoney(Number(salesAgg._sum?.total || 0));
@@ -110,6 +124,9 @@ export async function calculateProfit(
 
   const grossProfit = roundMoney(netRevenue - cogs);
   const grossMargin = netRevenue > 0 ? roundMoney((grossProfit / netRevenue) * 100) : 0;
+  const expenses = roundMoney(Number(expenseAgg._sum?.amount || 0));
+  const netProfit = roundMoney(grossProfit - expenses);
+  const netMargin = netRevenue > 0 ? roundMoney((netProfit / netRevenue) * 100) : 0;
   const saleCount =
     typeof salesAgg._count === 'number' ? salesAgg._count : Number(salesAgg._count || 0);
 
@@ -122,6 +139,9 @@ export async function calculateProfit(
     cogs,
     grossProfit,
     grossMargin,
+    expenses,
+    netProfit,
+    netMargin,
     purchases: roundMoney(Number(purchases._sum?.total || 0)),
     saleCount,
   };

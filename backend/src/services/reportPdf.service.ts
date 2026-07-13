@@ -355,12 +355,17 @@ export async function profitReportPdf(
 
   const netRev = Number((report as { netRevenue?: number }).netRevenue ?? report.revenue);
   const taxAmt = Number((report as { tax?: number }).tax ?? 0);
+  const expenses = Number((report as { expenses?: number }).expenses ?? 0);
+  const netProfit = Number((report as { netProfit?: number }).netProfit ?? report.grossProfit);
+  const netMargin = Number((report as { netMargin?: number }).netMargin ?? report.grossMargin);
   const rows: Array<[string, string, string, boolean?]> = [
     ['Gross sales (incl. tax)', money(report.revenue, cur), '', false],
     ['Tax collected', money(taxAmt, cur), '', false],
     ['Net sales (ex-tax)', money(netRev, cur), '', false],
     ['Cost of goods sold (COGS)', money(report.cogs, cur), 'At sale cost', false],
-    ['Gross profit', money(report.grossProfit, cur), `${report.grossMargin.toFixed(1)}% margin`, true],
+    ['Gross profit', money(report.grossProfit, cur), `${report.grossMargin.toFixed(1)}% margin`, false],
+    ['Operating expenses', money(expenses, cur), '', false],
+    ['Net profit', money(netProfit, cur), `${netMargin.toFixed(1)}% margin`, true],
     ['Purchases (period)', money(report.purchases, cur), 'PO totals', false],
   ];
 

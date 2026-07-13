@@ -137,6 +137,65 @@ export const profitReport = asyncHandler(async (req: Request, res: Response) => 
   return success(res, await reportService.profitReport(req.companyId, from, to));
 });
 
+export const productProfitReport = asyncHandler(async (req: Request, res: Response) => {
+  const { from, to } = parseQueryDateRange(req);
+  return success(res, await reportService.productProfitReport(req.companyId, from, to));
+});
+
+export const listExpenses = asyncHandler(async (req: Request, res: Response) => {
+  const { from, to } = parseQueryDateRange(req);
+  const expenseService = await import('../services/expense.service');
+  return success(
+    res,
+    await expenseService.listExpenses(req.companyId, {
+      from,
+      to,
+      category: typeof req.query.category === 'string' ? req.query.category : undefined,
+    })
+  );
+});
+
+export const createExpense = asyncHandler(async (req: Request, res: Response) => {
+  const expenseService = await import('../services/expense.service');
+  const row = await expenseService.createExpense(req.companyId, req.user!.id, req.body);
+  return created(res, row, 'Expense recorded');
+});
+
+export const deleteExpense = asyncHandler(async (req: Request, res: Response) => {
+  const expenseService = await import('../services/expense.service');
+  await expenseService.deleteExpense(req.companyId, req.params.id);
+  return success(res, { id: req.params.id }, 'Expense deleted');
+});
+
+export const exportCustomersCsv = asyncHandler(async (req: Request, res: Response) => {
+  const csv = await reportService.customersCsv(req.companyId);
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="customers.csv"');
+  return res.send(csv);
+});
+
+export const exportProductsCsv = asyncHandler(async (req: Request, res: Response) => {
+  const csv = await reportService.productsCsv(req.companyId);
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="products.csv"');
+  return res.send(csv);
+});
+
+export const exportExpensesCsv = asyncHandler(async (req: Request, res: Response) => {
+  const { from, to } = parseQueryDateRange(req);
+  const csv = await reportService.expensesCsv(req.companyId, from, to);
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="expenses.csv"');
+  return res.send(csv);
+});
+
+export const exportBackup = asyncHandler(async (req: Request, res: Response) => {
+  const text = await reportService.fullBackupText(req.companyId);
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="ims-backup.txt"');
+  return res.send(text);
+});
+
 export const customerBalances = asyncHandler(async (req: Request, res: Response) => {
   return success(res, await reportService.customerBalances(req.companyId));
 });

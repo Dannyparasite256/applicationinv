@@ -55,6 +55,12 @@ interface DashboardData {
     periodProfit?: number;
     periodMargin?: number;
     periodCogs?: number;
+    periodExpenses?: number;
+    periodNetProfit?: number;
+    periodNetMargin?: number;
+    expenses?: number;
+    netProfit?: number;
+    netMargin?: number;
     cogs?: number;
     netRevenue?: number;
     grossMargin?: number;
@@ -197,6 +203,8 @@ export function DashboardPage() {
   // Period profit follows the date-range buttons (Today / 7d / 30d / Month / Custom)
   const periodProfit = kpis?.periodProfit ?? kpis?.profit ?? 0;
   const periodMargin = kpis?.periodMargin ?? kpis?.grossMargin;
+  const periodNetProfit = kpis?.periodNetProfit ?? kpis?.netProfit ?? periodProfit;
+  const periodExpenses = kpis?.periodExpenses ?? kpis?.expenses ?? 0;
   const periodSales = kpis?.periodSales ?? kpis?.salesMonth ?? 0;
   const periodSalesCount = kpis?.periodSalesCount ?? kpis?.salesMonthCount ?? 0;
 
@@ -228,10 +236,18 @@ export function DashboardPage() {
       value: formatCurrency(periodProfit),
       sub:
         periodMargin != null
-          ? `${Number(periodMargin).toFixed(1)}% margin · ${rangeLabel}`
+          ? `${Number(periodMargin).toFixed(1)}% · ${rangeLabel}`
           : `Net sales − COGS · ${rangeLabel}`,
       icon: ShoppingBag,
       color: 'text-success',
+    },
+    {
+      label: 'Net Profit',
+      value: formatCurrency(periodNetProfit),
+      sub: `After expenses ${formatCurrency(periodExpenses)} · ${rangeLabel}`,
+      icon: Wallet,
+      color: 'text-success',
+      to: '/app/accounting',
     },
     {
       label: 'Inventory Value',
@@ -248,14 +264,6 @@ export function DashboardPage() {
       icon: AlertTriangle,
       color: 'text-destructive',
       to: '/app/inventory#low-stock',
-    },
-    {
-      label: 'Purchases (MTD)',
-      value: formatCurrency(kpis?.purchasesMonth || 0),
-      sub: `${kpis?.pendingOrders || 0} pending`,
-      icon: Truck,
-      color: 'text-primary',
-      to: '/app/purchases',
     },
     {
       label: 'Customers',

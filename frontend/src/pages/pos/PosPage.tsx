@@ -93,11 +93,13 @@ export function PosPage() {
   const [printOpen, setPrintOpen] = useState(false);
   const [autoPrint, setAutoPrint] = useState(false);
   const [customerId, setCustomerIdLocal] = useState<string>('');
+  const [redeemPoints, setRedeemPoints] = useState('');
   const [applyDiscount, setApplyDiscount] = useState(false);
   const [discountInput, setDiscountInput] = useState('');
   const [closingCash, setClosingCash] = useState('');
   const [shiftNotes, setShiftNotes] = useState('');
   const [showCloseShift, setShowCloseShift] = useState(false);
+  const [lastCustomerPhone, setLastCustomerPhone] = useState<string | null>(null);
   const qc = useQueryClient();
 
   // Debounce search so we don't spam the API on every keystroke
@@ -195,6 +197,10 @@ export function PosPage() {
           lastName?: string;
           businessName?: string;
           code: string;
+          phone?: string;
+          balance?: number | string;
+          creditLimit?: number | string;
+          loyaltyPoints?: number;
         }>;
       } catch {
         const { getCachedCustomers } = await import('@/lib/offline/db');
@@ -202,6 +208,8 @@ export function PosPage() {
       }
     },
   });
+
+  const selectedCustomer = (customers || []).find((c) => c.id === customerId);
 
   const staffUserId = useAuthStore((s) => s.user?.id);
   const authUser = useAuthStore((s) => s.user);
@@ -328,6 +336,7 @@ export function PosPage() {
           : 0,
         shiftId: shiftId || null,
         customerId: customerId || null,
+        redeemPoints: customerId && redeemPoints ? Math.floor(Number(redeemPoints) || 0) : 0,
       };
 
       if (!online) {
@@ -373,11 +382,13 @@ export function PosPage() {
         setLastSaleId(sale?.id || null);
         setLastSaleNo(sale?.saleNo || null);
         setLastSaleTotal(Number(sale?.total ?? totals.total));
+        setLastCustomerPhone(selectedCustomer?.phone || null);
         setShowSuccess(true);
         clearCart();
         setTendered('');
         setCustomerIdLocal('');
         setCustomerId(null);
+        setRedeemPoints('');
         setQuery('');
         setApplyDiscount(false);
         setDiscountInput('');
@@ -709,6 +720,22 @@ export function PosPage() {
                       variant: 'secondary' as const,
                       onClick: () => openLastReceipt(false),
                     },
+                    ...(lastCustomerPhone
+                      ? [
+                          {
+                            label: 'WhatsApp',
+                            variant: 'secondary' as const,
+                            onClick: () => {
+                              void import('@/lib/printShare').then(({ shareWhatsApp }) => {
+                                shareWhatsApp(
+                                  `Thank you! Sale ${lastSaleNo || ''} total ${formatCurrency(lastSaleTotal || 0)}.`,
+                                  lastCustomerPhone
+                                );
+                              });
+                            },
+                          },
+                        ]
+                      : []),
                     {
                       label: 'PDF',
                       variant: 'secondary' as const,
@@ -1027,23 +1054,52 @@ export function PosPage() {
 
           {/* Optional options — scroll if needed; never hide Charge */}
           <div className="space-y-2 pt-1">
-            <div className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-muted-foreground shrink-0" />
-              <select
-                className="h-9 w-full rounded-lg border border-input bg-background px-2 text-sm"
-                value={customerId}
-                onChange={(e) => {
-                  setCustomerIdLocal(e.target.value);
-                  setCustomerId(e.target.value || null);
-                }}
-              >
-                <option value="">Walk-in customer</option>
-                {(customers || []).map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.businessName || `${c.firstName || ''} ${c.lastName || ''}`.trim()} ({c.code})
-                  </option>
-                ))}
-              </select>
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-muted-foreground shrink-0" />
+                <select
+                  className="h-9 w-full rounded-lg border border-input bg-background px-2 text-sm"
+                  value={customerId}
+                  onChange={(e) => {
+                    setCustomerIdLocal(e.target.value);
+                    setCustomerId(e.target.value || null);
+                    setRedeemPoints('');
+                  }}
+                >
+                  <option value="">Walk-in customer</option>
+                  {(customers || []).map((c) => {
+                    const bal = Number(c.balance || 0);
+                    const pts = Number(c.loyaltyPoints || 0);
+                    return (
+                      <option key={c.id} value={c.id}>
+                        {c.businessName || `${c.firstName || ''} ${c.lastName || ''}`.trim()} ({c.code})
+                        {bal > 0 ? ` · owe ${bal}` : ''}
+                        {pts > 0 ? ` · ${pts} pts` : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+              {selectedCustomer && (
+                <p className="text-[10px] text-muted-foreground px-0.5">
+                  Balance {formatCurrency(Number(selectedCustomer.balance || 0))}
+                  {Number(selectedCustomer.creditLimit || 0) > 0
+                    ? ` · Credit limit ${formatCurrency(Number(selectedCustomer.creditLimit))}`
+                    : ''}
+                  {` · ${Number(selectedCustomer.loyaltyPoints || 0)} loyalty pts`}
+                </p>
+              )}
+              {customerId && Number(selectedCustomer?.loyaltyPoints || 0) > 0 && (
+                <Input
+                  type="number"
+                  min={0}
+                  max={Number(selectedCustomer?.loyaltyPoints || 0)}
+                  placeholder={`Redeem points (max ${selectedCustomer?.loyaltyPoints || 0})`}
+                  value={redeemPoints}
+                  onChange={(e) => setRedeemPoints(e.target.value)}
+                  className="h-8 text-xs"
+                />
+              )}
             </div>
 
             <div className="rounded-xl border border-border bg-background/50 p-2.5 space-y-2">

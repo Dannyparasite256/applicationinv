@@ -5,6 +5,7 @@ import {
   authenticate,
   requireTenant,
   requirePermissions,
+  requireAnyPermission,
   requireSalesAdmin,
 } from '../middleware/auth';
 import { validate } from '../middleware/validate';
@@ -17,6 +18,11 @@ router.use(authenticate, requireTenant);
 
 router.get('/', requirePermissions('sales.read'), saleController.list);
 router.get('/shifts/current', requirePermissions('pos.access'), saleController.currentShift);
+router.get(
+  '/shifts',
+  requireAnyPermission('pos.access', 'reports.read', 'sales.read'),
+  saleController.listShifts
+);
 router.post(
   '/shifts/open',
   requirePermissions('pos.access'),

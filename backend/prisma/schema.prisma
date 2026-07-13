@@ -277,6 +277,7 @@ model Company {
   settingsRecords   SystemSetting[]
   loginHistories    LoginHistory[]
   devices           UserDevice[]
+  expenses          Expense[]
 
   @@index([slug])
   @@index([status])
@@ -1335,6 +1336,31 @@ model Account {
   @@index([companyId])
   @@index([type])
   @@map("accounts")
+}
+
+/// Operating expenses for net profit (rent, salaries, utilities, etc.)
+model Expense {
+  id            String    @id @default(uuid())
+  companyId     String
+  category      String    @default("other") // rent, salaries, utilities, transport, supplies, marketing, other
+  description   String?
+  amount        Decimal   @db.Decimal(18, 4)
+  expenseDate   DateTime  @default(now())
+  paymentMethod String?   // CASH, BANK_TRANSFER, MOBILE_MONEY, OTHER
+  reference     String?
+  notes         String?
+  createdBy     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([expenseDate])
+  @@index([category])
+  @@index([deletedAt])
+  @@map("expenses")
 }
 
 model JournalEntry {

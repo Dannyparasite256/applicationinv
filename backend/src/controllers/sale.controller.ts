@@ -42,6 +42,14 @@ export const refund = asyncHandler(async (req: Request, res: Response) => {
   return success(res, sale, 'Sale refunded — inventory restored');
 });
 
+export const listShifts = asyncHandler(async (req: Request, res: Response) => {
+  const shifts = await saleService.listShifts(req.companyId, {
+    limit: req.query.limit ? Number(req.query.limit) : 30,
+    status: typeof req.query.status === 'string' ? req.query.status : undefined,
+  });
+  return success(res, shifts);
+});
+
 export const zReportPdf = asyncHandler(async (req: Request, res: Response) => {
   const { zReportPdf: build } = await import('../services/reportPdf.service');
   const buf = await build(req.companyId, req.params.id);

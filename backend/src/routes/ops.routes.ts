@@ -137,10 +137,34 @@ router.post('/invoices/:id/share/email', requirePermissions('sales.read'), async
 router.get('/reports/sales', requirePermissions('reports.read'), ops.salesReport);
 router.get('/reports/inventory', requirePermissions('reports.read'), ops.inventoryReport);
 router.get('/reports/profit', requirePermissions('reports.read'), ops.profitReport);
+router.get('/reports/product-profit', requirePermissions('reports.read'), ops.productProfitReport);
 router.get('/reports/customer-balances', requirePermissions('reports.read'), ops.customerBalances);
 router.get('/reports/sales.xlsx', requirePermissions('reports.read'), ops.exportSalesExcel);
 router.get('/reports/inventory.xlsx', requirePermissions('reports.read'), ops.exportInventoryExcel);
 router.get('/reports/sales.csv', requirePermissions('reports.read'), ops.exportSalesCsv);
+router.get('/reports/customers.csv', requirePermissions('reports.read'), ops.exportCustomersCsv);
+router.get('/reports/products.csv', requirePermissions('reports.read'), ops.exportProductsCsv);
+router.get('/reports/expenses.csv', requirePermissions('reports.read'), ops.exportExpensesCsv);
+router.get(
+  '/reports/backup.txt',
+  requireAnyPermission('reports.read', 'settings.company'),
+  ops.exportBackup
+);
+
+// Expenses (operating costs for net profit)
+router.get('/expenses', requireAnyPermission('accounting.read', 'reports.read'), ops.listExpenses);
+router.post(
+  '/expenses',
+  requireAnyPermission('accounting.read', 'settings.company', 'reports.read'),
+  auditLog('expenses'),
+  ops.createExpense
+);
+router.delete(
+  '/expenses/:id',
+  requireAnyPermission('accounting.read', 'settings.company'),
+  auditLog('expenses'),
+  ops.deleteExpense
+);
 router.get('/reports/sales.pdf', requirePermissions('reports.read'), ops.salesReportPdf);
 router.get('/reports/inventory.pdf', requirePermissions('reports.read'), ops.inventoryReportPdf);
 router.get('/reports/profit.pdf', requirePermissions('reports.read'), ops.profitReportPdf);

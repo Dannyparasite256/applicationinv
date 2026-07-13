@@ -45,6 +45,8 @@ export async function createSale(
     notes?: string | null;
     isOffline?: boolean;
     offlineId?: string | null;
+    /** Loyalty points to redeem (converted to currency discount) */
+    redeemPoints?: number | null;
   }
 ) {
   const cid = requireCompany(companyId);
@@ -159,7 +161,65 @@ export async function createSale(
     });
   }
 
-  const discountAmount = Number(input.discountAmount ?? 0) || 0;
+  let discountAmount = Number(input.discountAmount ?? 0) || 0;
+
+  // Loyalty redeem: convert points → currency discount using active program
+  let redeemPoints = Math.max(0, Math.floor(Number(input.redeemPoints ?? 0) || 0));
+  let loyaltyProgram: {
+    id: string;
+    pointsPerCurrency: unknown;
+    redemptionRate: unknown;
+    minRedeemPoints: number;
+  } | null = null;
+  let customerRow: {
+    id: string;
+    balance: unknown;
+    creditLimit: unknown;
+    loyaltyPoints: number;
+  } | null = null;
+
+  if (input.customerId) {
+    customerRow = await prisma.customer.findFirst({
+      where: { id: input.customerId, companyId: cid, deletedAt: null },
+      select: { id: true, balance: true, creditLimit: true, loyaltyPoints: true },
+    });
+    if (!customerRow) throw new NotFoundError('Customer');
+
+    loyaltyProgram = await prisma.loyaltyProgram.findFirst({
+      where: { companyId: cid, isActive: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (!loyaltyProgram) {
+      loyaltyProgram = await prisma.loyaltyProgram.create({
+        data: {
+          companyId: cid,
+          name: 'Default',
+          pointsPerCurrency: 1,
+          redemptionRate: 0.01,
+          minRedeemPoints: 100,
+          isActive: true,
+        },
+      });
+    }
+
+    if (redeemPoints > 0) {
+      const minPts = Number(loyaltyProgram.minRedeemPoints || 0);
+      if (redeemPoints < minPts) {
+        throw new ValidationError(`Minimum ${minPts} loyalty points required to redeem`);
+      }
+      if (redeemPoints > Number(customerRow.loyaltyPoints || 0)) {
+        throw new ValidationError(
+          `Customer only has ${customerRow.loyaltyPoints} loyalty points`
+        );
+      }
+      const rate = Number(loyaltyProgram.redemptionRate || 0.01);
+      const redeemValue = roundMoney(redeemPoints * rate);
+      discountAmount = roundMoney(discountAmount + redeemValue);
+    }
+  } else if (redeemPoints > 0) {
+    throw new ValidationError('Select a customer to redeem loyalty points');
+  }
+
   const total = Math.max(0, roundMoney(subtotal + taxAmount - discountAmount));
 
   // Multi-currency: product prices & sale totals stay in company base currency.
@@ -250,6 +310,19 @@ export async function createSale(
     paidAmount = Math.max(paidAmount, total);
   }
   const primaryMethod = normalizedPayments[0]?.method || 'CASH';
+
+  // Credit limit: unpaid portion must fit under remaining credit
+  if (input.customerId && customerRow && paidAmount + 0.02 < total) {
+    const newCredit = roundMoney(total - paidAmount);
+    const limit = Number(customerRow.creditLimit || 0);
+    const bal = Number(customerRow.balance || 0);
+    if (limit > 0 && bal + newCredit > limit + 0.02) {
+      const remaining = Math.max(0, roundMoney(limit - bal));
+      throw new ValidationError(
+        `Credit limit exceeded. Limit ${limit}, balance ${bal}, remaining credit ${remaining}. Collect at least ${roundMoney(total - remaining)} now.`
+      );
+    }
+  }
 
   // Only attach a shift that belongs to this cashier (stale shift ids from shared devices break sales)
   let shiftId: string | null = input.shiftId || null;
@@ -422,11 +495,26 @@ export async function createSale(
           }
         }
 
-        if (input.customerId && paidAmount < total) {
-          await tx.customer.update({
-            where: { id: input.customerId },
-            data: { balance: { increment: total - paidAmount } },
-          });
+        if (input.customerId) {
+          // Credit balance for unpaid portion
+          if (paidAmount < total) {
+            await tx.customer.update({
+              where: { id: input.customerId },
+              data: { balance: { increment: total - paidAmount } },
+            });
+          }
+
+          // Loyalty: earn points on paid amount, redeem if requested
+          const ppc = Number(loyaltyProgram?.pointsPerCurrency ?? 1) || 1;
+          const earnBase = Math.min(paidAmount, total);
+          const earned = Math.max(0, Math.floor(earnBase * ppc));
+          const pointsDelta = earned - redeemPoints;
+          if (pointsDelta !== 0 || redeemPoints > 0) {
+            await tx.customer.update({
+              where: { id: input.customerId },
+              data: { loyaltyPoints: { increment: pointsDelta } },
+            });
+          }
         }
 
         return sale;
@@ -443,6 +531,25 @@ export async function createSale(
     }
   }
   throw lastErr instanceof Error ? lastErr : new ValidationError('Could not create sale — please try again');
+}
+
+/** List closed/open shifts for end-of-day history */
+export async function listShifts(
+  companyId: string | null | undefined,
+  opts?: { limit?: number; status?: string }
+) {
+  const cid = requireCompany(companyId);
+  return prisma.shift.findMany({
+    where: {
+      companyId: cid,
+      ...(opts?.status ? { status: opts.status } : {}),
+    },
+    orderBy: { openedAt: 'desc' },
+    take: opts?.limit ?? 30,
+    include: {
+      user: { select: { id: true, firstName: true, lastName: true, email: true } },
+    },
+  });
 }
 
 export async function listSales(

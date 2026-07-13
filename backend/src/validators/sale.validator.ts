@@ -50,6 +50,8 @@ export const createSaleSchema = z.object({
   isOffline: z.boolean().optional().default(false),
   offlineId: z.string().optional().nullable(),
   promotionCode: z.string().optional().nullable(),
+  /** Loyalty points to redeem for currency discount */
+  redeemPoints: z.coerce.number().int().min(0).optional().nullable(),
 });
 
 export const openShiftSchema = z.object({

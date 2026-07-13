@@ -107,8 +107,105 @@ export async function profitReport(companyId: string | null | undefined, from?: 
     /** Gross profit = net revenue − COGS */
     grossProfit: p.grossProfit,
     grossMargin: p.grossMargin,
+    expenses: p.expenses,
+    netProfit: p.netProfit,
+    netMargin: p.netMargin,
     purchases: p.purchases,
     saleCount: p.saleCount,
+  };
+}
+
+/** Per-product profit for the period (qty sold, revenue, COGS, margin) */
+export async function productProfitReport(
+  companyId: string | null | undefined,
+  from?: Date,
+  to?: Date
+) {
+  const cid = requireCompany(companyId);
+  const fromDate = from || startOfMonth(new Date());
+  const toDate = to || endOfDay(new Date());
+
+  const items = await prisma.saleItem.findMany({
+    where: {
+      sale: {
+        companyId: cid,
+        deletedAt: null,
+        saleDate: { gte: fromDate, lte: toDate },
+        status: { notIn: ['CANCELLED', 'RETURNED'] },
+        paymentStatus: { notIn: ['REFUNDED', 'VOID'] },
+      },
+    },
+    select: {
+      productId: true,
+      productName: true,
+      sku: true,
+      quantity: true,
+      total: true,
+      costPrice: true,
+      taxAmount: true,
+      product: { select: { costPrice: true, name: true, sku: true } },
+    },
+  });
+
+  type Acc = {
+    productId: string;
+    name: string;
+    sku: string;
+    quantity: number;
+    revenue: number;
+    cogs: number;
+  };
+  const map = new Map<string, Acc>();
+  for (const it of items) {
+    const key = it.productId;
+    const unitCost =
+      Number(it.costPrice) > 0 ? Number(it.costPrice) : Number(it.product?.costPrice || 0);
+    const qty = Number(it.quantity);
+    // Net line revenue approx: total − tax
+    const lineNet = Math.max(0, Number(it.total) - Number(it.taxAmount || 0));
+    const cur = map.get(key) || {
+      productId: key,
+      name: it.productName || it.product?.name || 'Product',
+      sku: it.sku || it.product?.sku || '',
+      quantity: 0,
+      revenue: 0,
+      cogs: 0,
+    };
+    cur.quantity += qty;
+    cur.revenue += lineNet;
+    cur.cogs += unitCost * qty;
+    map.set(key, cur);
+  }
+
+  const rows = Array.from(map.values())
+    .map((r) => {
+      const revenue = Math.round(r.revenue * 10000) / 10000;
+      const cogs = Math.round(r.cogs * 10000) / 10000;
+      const profit = Math.round((revenue - cogs) * 10000) / 10000;
+      const margin = revenue > 0 ? Math.round((profit / revenue) * 1000) / 10 : 0;
+      return {
+        productId: r.productId,
+        name: r.name,
+        sku: r.sku,
+        quantity: Math.round(r.quantity * 10000) / 10000,
+        revenue,
+        cogs,
+        profit,
+        margin,
+      };
+    })
+    .sort((a, b) => b.profit - a.profit);
+
+  return {
+    from: fromDate,
+    to: toDate,
+    rows,
+    totals: {
+      quantity: rows.reduce((s, r) => s + r.quantity, 0),
+      revenue: rows.reduce((s, r) => s + r.revenue, 0),
+      cogs: rows.reduce((s, r) => s + r.cogs, 0),
+      profit: rows.reduce((s, r) => s + r.profit, 0),
+    },
   };
 }
 
@@ -378,4 +475,101 @@ export async function salesCsv(companyId: string | null | undefined, from?: Date
       paymentStatus: s.paymentStatus,
     }))
   );
+}
+
+export async function customersCsv(companyId: string | null | undefined) {
+  const cid = requireCompany(companyId);
+  const rows = await prisma.customer.findMany({
+    where: { companyId: cid, deletedAt: null },
+    orderBy: { code: 'asc' },
+  });
+  return toCsv(
+    rows.map((c) => ({
+      code: c.code,
+      firstName: c.firstName || '',
+      lastName: c.lastName || '',
+      businessName: c.businessName || '',
+      phone: c.phone || '',
+      email: c.email || '',
+      balance: Number(c.balance),
+      creditLimit: Number(c.creditLimit),
+      loyaltyPoints: c.loyaltyPoints,
+    }))
+  );
+}
+
+export async function productsCsv(companyId: string | null | undefined) {
+  const cid = requireCompany(companyId);
+  const rows = await prisma.product.findMany({
+    where: { companyId: cid, deletedAt: null },
+    include: { stockLevels: true },
+    orderBy: { name: 'asc' },
+  });
+  return toCsv(
+    rows.map((p) => {
+      const qty = p.stockLevels.reduce((s, l) => s + Number(l.quantity), 0);
+      return {
+        sku: p.sku,
+        name: p.name,
+        costPrice: Number(p.costPrice),
+        sellingPrice: Number(p.sellingPrice),
+        quantity: qty,
+        reorderLevel: Number(p.reorderLevel),
+        isActive: p.isActive ? 'YES' : 'NO',
+      };
+    })
+  );
+}
+
+export async function expensesCsv(
+  companyId: string | null | undefined,
+  from?: Date,
+  to?: Date
+) {
+  const { listExpenses } = await import('./expense.service');
+  const report = await listExpenses(companyId, { from, to, limit: 5000 });
+  return toCsv(
+    report.rows.map((r) => ({
+      date: new Date(r.expenseDate).toISOString().slice(0, 10),
+      category: r.category,
+      description: r.description || '',
+      amount: Number(r.amount),
+      paymentMethod: r.paymentMethod || '',
+      reference: r.reference || '',
+    }))
+  );
+}
+
+/** Combined backup pack as plain text sections (easy download without zip deps) */
+export async function fullBackupText(companyId: string | null | undefined) {
+  const cid = requireCompany(companyId);
+  const [customers, products, sales, inventory] = await Promise.all([
+    customersCsv(cid),
+    productsCsv(cid),
+    salesCsv(cid),
+    exportInventoryExcel(cid).then(() => inventoryReport(cid)),
+  ]);
+  const invCsv = toCsv(
+    inventory.rows.map((r) => ({
+      sku: r.sku,
+      name: r.name,
+      quantity: r.quantity,
+      costPrice: r.costPrice,
+      sellingPrice: r.sellingPrice,
+      value: r.value,
+    }))
+  );
+  return [
+    '=== CUSTOMERS ===',
+    customers,
+    '',
+    '=== PRODUCTS ===',
+    products,
+    '',
+    '=== SALES (MTD default) ===',
+    sales,
+    '',
+    '=== INVENTORY ===',
+    invCsv,
+  ].join('\n');
 }
