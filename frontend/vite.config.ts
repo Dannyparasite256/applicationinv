@@ -2,6 +2,9 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
  * Asset base path:
@@ -15,7 +18,9 @@ export default defineConfig({
   base: useRelativeBase ? './' : '/',
   plugins: [
     react(),
-    VitePWA({
+    ...(process.env.NO_PWA === '1'
+      ? []
+      : [VitePWA({
       // Do not auto-register SW — it breaks Capacitor dynamic chunks
       // ("Failed to fetch dynamically imported module") on Android WebView.
       injectRegister: false,
@@ -83,7 +88,7 @@ export default defineConfig({
           },
         ],
       },
-    }),
+    })]),
   ],
   resolve: {
     alias: {
