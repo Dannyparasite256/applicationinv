@@ -37,8 +37,29 @@ function ensureOutbox() {
   }
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    promise.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      }
+    );
+  });
+}
+
 async function createEtherealTransport(): Promise<Transporter> {
-  const testAccount = await nodemailer.createTestAccount();
+  // Ethereal account creation is a remote API call — cap wait so signup never hangs
+  const testAccount = await withTimeout(
+    nodemailer.createTestAccount(),
+    8_000,
+    'Ethereal createTestAccount'
+  );
   etherealUser = testAccount.user;
   logger.info('Email using Ethereal test SMTP (preview URLs logged)', {
     user: testAccount.user,
@@ -48,6 +69,9 @@ async function createEtherealTransport(): Promise<Transporter> {
     port: testAccount.smtp.port,
     secure: testAccount.smtp.secure,
     auth: { user: testAccount.user, pass: testAccount.pass },
+    connectionTimeout: 8_000,
+    greetingTimeout: 8_000,
+    socketTimeout: 12_000,
   });
 }
 
@@ -60,6 +84,9 @@ function createSmtpTransport(): Transporter {
     secure: port === 465,
     requireTLS: port === 587,
     auth: env.SMTP_USER ? { user: env.SMTP_USER, pass: env.SMTP_PASS } : undefined,
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 15_000,
     tls: {
       // Allow self-signed in local/dev mail servers
       rejectUnauthorized: env.NODE_ENV === 'production',
@@ -188,7 +215,8 @@ export async function sendEmail(options: {
   };
 
   try {
-    const info = await transport.sendMail(mail);
+    // Cap send wait so callers never hang indefinitely on SMTP
+    const info = await withTimeout(transport.sendMail(mail), 15_000, 'sendMail');
     const previewUrl =
       transportMode === 'ethereal' ? nodemailer.getTestMessageUrl(info) || undefined : undefined;
 

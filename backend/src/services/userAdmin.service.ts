@@ -141,17 +141,23 @@ export async function createUser(
     });
   }
 
-  // Email credentials (when not pending — pending staff get email on approve)
+  // Email credentials in background (do not delay API response / UI loading)
   if (!needsApproval) {
-    const company = await prisma.company.findUnique({ where: { id: cid }, select: { name: true } });
-    await sendStaffCredentialsEmail({
-      to: user.email,
-      name: `${user.firstName} ${user.lastName}`,
-      email: user.email,
-      temporaryPassword: plainPassword,
-      companyName: company?.name,
-      approved: true,
-    }).catch(() => undefined);
+    void (async () => {
+      try {
+        const company = await prisma.company.findUnique({ where: { id: cid }, select: { name: true } });
+        await sendStaffCredentialsEmail({
+          to: user.email,
+          name: `${user.firstName} ${user.lastName}`,
+          email: user.email,
+          temporaryPassword: plainPassword,
+          companyName: company?.name,
+          approved: true,
+        });
+      } catch {
+        /* non-fatal */
+      }
+    })();
   }
 
   return {
@@ -293,14 +299,21 @@ export async function approveStaff(
     },
   });
 
-  const company = await prisma.company.findUnique({ where: { id: cid }, select: { name: true } });
-  await sendStaffCredentialsEmail({
-    to: updated.email,
-    name: `${updated.firstName} ${updated.lastName}`,
-    email: updated.email,
-    companyName: company?.name,
-    approved: true,
-  }).catch(() => undefined);
+  // Email in background — approval response must not wait on SMTP
+  void (async () => {
+    try {
+      const company = await prisma.company.findUnique({ where: { id: cid }, select: { name: true } });
+      await sendStaffCredentialsEmail({
+        to: updated.email,
+        name: `${updated.firstName} ${updated.lastName}`,
+        email: updated.email,
+        companyName: company?.name,
+        approved: true,
+      });
+    } catch {
+      /* non-fatal */
+    }
+  })();
 
   await cacheDel(`perms:${userId}`);
   return { ...updated, message: 'Staff approved and can now login' };
@@ -754,15 +767,22 @@ export async function setStaffPassword(
     },
   });
 
-  const company = await prisma.company.findUnique({ where: { id: cid }, select: { name: true } });
-  await sendStaffCredentialsEmail({
-    to: user.email,
-    name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
-    email: user.email,
-    temporaryPassword: newPassword,
-    companyName: company?.name,
-    approved: true,
-  }).catch(() => undefined);
+  // Notify by email in background so admin UI is not stuck loading
+  void (async () => {
+    try {
+      const company = await prisma.company.findUnique({ where: { id: cid }, select: { name: true } });
+      await sendStaffCredentialsEmail({
+        to: user.email,
+        name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
+        email: user.email,
+        temporaryPassword: newPassword,
+        companyName: company?.name,
+        approved: true,
+      });
+    } catch {
+      /* non-fatal */
+    }
+  })();
 
   return {
     id: userId,

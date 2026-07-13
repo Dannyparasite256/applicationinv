@@ -57,9 +57,16 @@ api.interceptors.response.use(
     const isPublicAuth =
       /\/auth\/(login|register|refresh|forgot-password|reset-password|verify-email)/i.test(url);
 
-    // Retry transient network / cold-start failures (Render free tier sleep)
+    // Retry transient network / cold-start failures (Render free tier sleep).
+    // NEVER auto-retry write methods — register/login/create may already have
+    // succeeded on the server (account in DB) while the client timed out waiting
+    // for email/SMTP, which made signup appear stuck or double-submit.
+    const method = String(original?.method || 'get').toLowerCase();
+    const isSafeRetry =
+      method === 'get' || method === 'head' || method === 'options';
     if (
       original &&
+      isSafeRetry &&
       !error.response &&
       (error.code === 'ECONNABORTED' ||
         error.code === 'ERR_NETWORK' ||

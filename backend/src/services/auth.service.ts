@@ -276,14 +276,18 @@ export async function registerCompany(input: {
     return { company, user, verifyToken };
   });
 
-  await sendVerificationEmail(
-    result.user.email,
-    result.verifyToken,
-    result.user.firstName
-  ).catch((e) => logger.warn('Verification email failed', { e }));
-
+  // Respond immediately after DB commit — never block signup on SMTP/Ethereal.
+  // Owners are already emailVerified; welcome mail is best-effort in the background.
   const auth = await buildAuthResponse(result.user.id);
-  return { ...auth, company: { id: result.company.id, name: result.company.name, slug: result.company.slug } };
+
+  void sendVerificationEmail(result.user.email, result.verifyToken, result.user.firstName).catch(
+    (e) => logger.warn('Verification email failed', { e })
+  );
+
+  return {
+    ...auth,
+    company: { id: result.company.id, name: result.company.name, slug: result.company.slug },
+  };
 }
 
 export async function login(input: {

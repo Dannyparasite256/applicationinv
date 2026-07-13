@@ -58,12 +58,27 @@ export function RegisterPage() {
         currency: localCurrency,
         country: localCountry || undefined,
       });
+      if (!result?.accessToken || !result?.user) {
+        toast.error('Account may have been created, but login data was incomplete. Try signing in.');
+        navigate('/login');
+        return;
+      }
       setAuth(result.user, result.accessToken, result.refreshToken);
       applyLocationDefault(localCurrency);
       toast.success(`Company created · default currency ${localCurrency}`);
-      navigate('/app');
+      navigate('/app', { replace: true });
     } catch (e) {
-      toast.error(getErrorMessage(e));
+      const msg = getErrorMessage(e);
+      // Account often already exists if a previous attempt saved to DB but the
+      // client timed out while the server was still sending email.
+      if (/already registered|already exists|conflict|email.*taken/i.test(msg)) {
+        toast.message('This email already has an account', {
+          description: 'Sign in with your password, or use Forgot password if needed.',
+        });
+        navigate('/login', { replace: true });
+        return;
+      }
+      toast.error(msg);
     }
   };
 
