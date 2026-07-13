@@ -80,8 +80,9 @@ export async function createUser(
   }
 ) {
   const cid = requireCompany(companyId);
+  const email = input.email.toLowerCase().trim();
   const existing = await prisma.user.findFirst({
-    where: { companyId: cid, email: input.email.toLowerCase() },
+    where: { companyId: cid, email },
   });
   if (existing) throw new ConflictError('Email already exists in this company');
 
@@ -90,17 +91,19 @@ export async function createUser(
   const ownerRoles: RoleCode[] = [RoleCode.COMPANY_OWNER, RoleCode.SUPER_ADMIN];
   const needsApproval = !ownerRoles.includes(roleCode);
 
-  const role = await ensureCompanyRole(cid, roleCode);
-
-  // Admin may omit password — system generates a temporary one
+  // Hash password in parallel with role ensure (role copy can be the slow part once)
   const plainPassword =
     input.password && input.password.length >= 8 ? input.password : generateTempPassword();
-  const passwordHash = await hashPassword(plainPassword);
+  const [role, passwordHash] = await Promise.all([
+    ensureCompanyRole(cid, roleCode),
+    hashPassword(plainPassword),
+  ]);
+
   const user = await prisma.user.create({
     data: {
       companyId: cid,
       branchId: input.branchId,
-      email: input.email.toLowerCase(),
+      email,
       passwordHash,
       firstName: input.firstName,
       lastName: input.lastName,
@@ -112,40 +115,46 @@ export async function createUser(
   });
   await prisma.userRole.create({ data: { userId: user.id, roleId: role.id } });
 
-  // Notify managers who can approve
-  const managers = await prisma.user.findMany({
-    where: {
-      companyId: cid,
-      deletedAt: null,
-      status: UserStatus.ACTIVE,
-      roles: {
-        some: {
-          role: { code: { in: [RoleCode.COMPANY_OWNER, RoleCode.ADMINISTRATOR, RoleCode.BRANCH_MANAGER] } },
-        },
-      },
-    },
-    select: { id: true },
-  });
-  if (managers.length) {
-    await prisma.notification.createMany({
-      data: managers.map((m) => ({
-        companyId: cid,
-        userId: m.id,
-        channel: 'IN_APP' as const,
-        title: 'Staff approval needed',
-        body: `${input.firstName} ${input.lastName} (${input.email}) was added as ${roleCode.replace(/_/g, ' ')} and is waiting for approval.`,
-        status: 'SENT' as const,
-        sentAt: new Date(),
-        data: { type: 'STAFF_PENDING', userId: user.id },
-      })),
-    });
-  }
-
-  // Email credentials in background (do not delay API response / UI loading)
-  if (!needsApproval) {
-    void (async () => {
-      try {
-        const company = await prisma.company.findUnique({ where: { id: cid }, select: { name: true } });
+  // Side effects AFTER the account exists — never block the HTTP response / UI spinner
+  void (async () => {
+    try {
+      if (needsApproval) {
+        const managers = await prisma.user.findMany({
+          where: {
+            companyId: cid,
+            deletedAt: null,
+            status: UserStatus.ACTIVE,
+            roles: {
+              some: {
+                role: {
+                  code: {
+                    in: [RoleCode.COMPANY_OWNER, RoleCode.ADMINISTRATOR, RoleCode.BRANCH_MANAGER],
+                  },
+                },
+              },
+            },
+          },
+          select: { id: true },
+        });
+        if (managers.length) {
+          await prisma.notification.createMany({
+            data: managers.map((m) => ({
+              companyId: cid,
+              userId: m.id,
+              channel: 'IN_APP' as const,
+              title: 'Staff approval needed',
+              body: `${input.firstName} ${input.lastName} (${email}) was added as ${roleCode.replace(/_/g, ' ')} and is waiting for approval.`,
+              status: 'SENT' as const,
+              sentAt: new Date(),
+              data: { type: 'STAFF_PENDING', userId: user.id },
+            })),
+          });
+        }
+      } else {
+        const company = await prisma.company.findUnique({
+          where: { id: cid },
+          select: { name: true },
+        });
         await sendStaffCredentialsEmail({
           to: user.email,
           name: `${user.firstName} ${user.lastName}`,
@@ -154,11 +163,11 @@ export async function createUser(
           companyName: company?.name,
           approved: true,
         });
-      } catch {
-        /* non-fatal */
       }
-    })();
-  }
+    } catch {
+      /* non-fatal — staff already saved */
+    }
+  })();
 
   return {
     id: user.id,
@@ -245,9 +254,16 @@ export async function approveStaff(
   approverId: string
 ) {
   const cid = requireCompany(companyId);
+  // Lightweight lookup — no nested roles include (faster confirm)
   const user = await prisma.user.findFirst({
     where: { id: userId, companyId: cid, deletedAt: null },
-    include: { roles: { include: { role: true } } },
+    select: {
+      id: true,
+      email: true,
+      firstName: true,
+      lastName: true,
+      status: true,
+    },
   });
   if (!user) throw new NotFoundError('User');
   if (user.status === UserStatus.ACTIVE) {
@@ -257,6 +273,7 @@ export async function approveStaff(
     throw new ForbiddenError('Suspended staff must be reactivated via status change');
   }
 
+  // Critical path only: mark staff active so they can log in immediately
   const updated = await prisma.user.update({
     where: { id: userId },
     data: {
@@ -275,34 +292,38 @@ export async function approveStaff(
     },
   });
 
-  await prisma.auditLog.create({
-    data: {
-      companyId: cid,
-      userId: approverId,
-      action: 'STAFF_APPROVED',
-      module: 'users',
-      entityType: 'User',
-      entityId: userId,
-      newValues: { status: 'ACTIVE', approvedBy: approverId },
-    },
-  });
-
-  await prisma.notification.create({
-    data: {
-      companyId: cid,
-      userId,
-      channel: 'IN_APP',
-      title: 'Account approved',
-      body: 'Your staff account has been approved. You can now sign in with your assigned worker access.',
-      status: 'SENT',
-      sentAt: new Date(),
-    },
-  });
-
-  // Email in background — approval response must not wait on SMTP
+  // Audit, in-app notify, email, cache — all after response so UI never waits
   void (async () => {
     try {
-      const company = await prisma.company.findUnique({ where: { id: cid }, select: { name: true } });
+      await Promise.all([
+        prisma.auditLog.create({
+          data: {
+            companyId: cid,
+            userId: approverId,
+            action: 'STAFF_APPROVED',
+            module: 'users',
+            entityType: 'User',
+            entityId: userId,
+            newValues: { status: 'ACTIVE', approvedBy: approverId },
+          },
+        }),
+        prisma.notification.create({
+          data: {
+            companyId: cid,
+            userId,
+            channel: 'IN_APP',
+            title: 'Account approved',
+            body: 'Your staff account has been approved. You can now sign in with your assigned worker access.',
+            status: 'SENT',
+            sentAt: new Date(),
+          },
+        }),
+        cacheDel(`perms:${userId}`),
+      ]);
+      const company = await prisma.company.findUnique({
+        where: { id: cid },
+        select: { name: true },
+      });
       await sendStaffCredentialsEmail({
         to: updated.email,
         name: `${updated.firstName} ${updated.lastName}`,
@@ -311,11 +332,10 @@ export async function approveStaff(
         approved: true,
       });
     } catch {
-      /* non-fatal */
+      /* non-fatal — staff already active in DB */
     }
   })();
 
-  await cacheDel(`perms:${userId}`);
   return { ...updated, message: 'Staff approved and can now login' };
 }
 

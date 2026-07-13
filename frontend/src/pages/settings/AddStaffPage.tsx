@@ -29,6 +29,7 @@ export function AddStaffPage() {
     lastName: '',
     roleCode: 'CASHIER',
   });
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   const { data: users } = useQuery({
     queryKey: ['users'],
@@ -51,23 +52,58 @@ export function AddStaffPage() {
         lastName: '',
         roleCode: 'CASHIER',
       });
-      void qc.invalidateQueries({ queryKey: ['users'], refetchType: 'active' });
-      void qc.invalidateQueries({ queryKey: ['staff-pending'], refetchType: 'active' });
-      void qc.invalidateQueries({ queryKey: ['staff-pending-count'], refetchType: 'active' });
+      // Soft refresh lists in background (do not block UI)
+      void qc.invalidateQueries({ queryKey: ['users'] });
+      void qc.invalidateQueries({ queryKey: ['staff-pending'] });
+      void qc.invalidateQueries({ queryKey: ['staff-pending-count'] });
+      void qc.invalidateQueries({ queryKey: ['staff-all'] });
     },
-    onError: (e) => toast.error(getErrorMessage(e)),
+    onError: (e) => {
+      const msg = getErrorMessage(e);
+      if (/already exists|already registered|conflict/i.test(msg)) {
+        toast.message('That email is already on the team', {
+          description: 'Confirm them below if they are still pending, or pick another email.',
+        });
+        void qc.invalidateQueries({ queryKey: ['users'] });
+        void qc.invalidateQueries({ queryKey: ['staff-pending'] });
+        return;
+      }
+      toast.error(msg);
+    },
   });
 
   const confirmStaff = useMutation({
-    mutationFn: async (id: string) => api.post(`/users/${id}/approve`),
+    mutationFn: async (id: string) => {
+      setConfirmingId(id);
+      // Optimistic: drop from pending list immediately so UI feels instant
+      qc.setQueriesData({ queryKey: ['users'] }, (old: unknown) => {
+        if (!old || typeof old !== 'object') return old;
+        const o = old as { data?: Array<{ id: string; status?: string }> };
+        if (!Array.isArray(o.data)) return old;
+        return {
+          ...o,
+          data: o.data.map((u) =>
+            u.id === id ? { ...u, status: 'ACTIVE' } : u
+          ),
+        };
+      });
+      return api.post(`/users/${id}/approve`);
+    },
     onSuccess: () => {
       toast.success('Staff confirmed — they can login now');
-      void qc.invalidateQueries({ queryKey: ['users'], refetchType: 'active' });
-      void qc.invalidateQueries({ queryKey: ['staff-pending'], refetchType: 'active' });
-      void qc.invalidateQueries({ queryKey: ['staff-pending-count'], refetchType: 'active' });
-      void qc.invalidateQueries({ queryKey: ['notifications'], refetchType: 'active' });
+      setConfirmingId(null);
+      void qc.invalidateQueries({ queryKey: ['users'] });
+      void qc.invalidateQueries({ queryKey: ['staff-pending'] });
+      void qc.invalidateQueries({ queryKey: ['staff-pending-count'] });
+      void qc.invalidateQueries({ queryKey: ['staff-all'] });
+      void qc.invalidateQueries({ queryKey: ['notifications'] });
     },
-    onError: (e) => toast.error(getErrorMessage(e)),
+    onError: (e) => {
+      setConfirmingId(null);
+      toast.error(getErrorMessage(e));
+      void qc.invalidateQueries({ queryKey: ['users'] });
+      void qc.invalidateQueries({ queryKey: ['staff-pending'] });
+    },
   });
 
   return (
@@ -204,7 +240,7 @@ export function AddStaffPage() {
                       size="sm"
                       variant="success"
                       className="font-semibold"
-                      loading={confirmStaff.isPending}
+                      loading={confirmStaff.isPending && confirmingId === u.id}
                       onClick={() => confirmStaff.mutate(u.id)}
                     >
                       <UserCheck className="h-4 w-4" /> Confirm Staff

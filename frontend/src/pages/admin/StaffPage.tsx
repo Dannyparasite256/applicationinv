@@ -223,9 +223,20 @@ export function StaffPage() {
       );
       setShowForm(false);
       setForm(emptyForm());
+      // Background refresh only — response already has the new staff
       refreshAll();
     },
-    onError: (e) => toast.error(getErrorMessage(e)),
+    onError: (e) => {
+      const msg = getErrorMessage(e);
+      if (/already exists|already registered|conflict/i.test(msg)) {
+        toast.message('That email is already on the team', {
+          description: 'Confirm them if pending, or use a different email.',
+        });
+        refreshAll();
+        return;
+      }
+      toast.error(msg);
+    },
   });
 
   const update = useMutation({
@@ -274,6 +285,23 @@ export function StaffPage() {
   const approve = useMutation({
     mutationFn: async (id: string) => {
       setConfirmingId(id);
+      // Optimistic UI: remove from pending immediately (staff already confirmed in practice
+      // once the request is accepted; if it fails we re-fetch)
+      qc.setQueriesData({ queryKey: ['staff-pending'] }, (old: unknown) => {
+        if (!old || typeof old !== 'object') return old;
+        const o = old as { data?: Array<{ id: string }> };
+        if (!Array.isArray(o.data)) return old;
+        return { ...o, data: o.data.filter((u) => u.id !== id) };
+      });
+      qc.setQueriesData({ queryKey: ['staff-all'] }, (old: unknown) => {
+        if (!old || typeof old !== 'object') return old;
+        const o = old as { data?: Array<{ id: string; status?: string }> };
+        if (!Array.isArray(o.data)) return old;
+        return {
+          ...o,
+          data: o.data.map((u) => (u.id === id ? { ...u, status: 'ACTIVE' } : u)),
+        };
+      });
       return api.post(`/users/${id}/approve`);
     },
     onSuccess: () => {
@@ -284,6 +312,7 @@ export function StaffPage() {
     onError: (e) => {
       setConfirmingId(null);
       toast.error(getErrorMessage(e));
+      refreshAll();
     },
   });
 

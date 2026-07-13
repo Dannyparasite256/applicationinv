@@ -658,7 +658,8 @@ export async function resetCompanyUserPassword(
     })
     .catch(() => undefined);
 
-  await sendStaffCredentialsEmail({
+  // Do not block platform password reset UI on SMTP
+  void sendStaffCredentialsEmail({
     to: user.email,
     name: `${user.firstName} ${user.lastName}`.trim() || user.email,
     email: user.email,

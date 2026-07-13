@@ -58,9 +58,30 @@ export async function disconnectRedis(): Promise<void> {
 /** Simple cache helpers with Redis fallback to memory */
 const memoryCache = new Map<string, { value: string; expiresAt: number }>();
 
+/** Never let a stuck Redis peer hang an API request (staff approve, auth, etc.). */
+function withRedisTimeout<T>(op: Promise<T>, ms = 800): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('Redis op timed out')), ms);
+    op.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      }
+    );
+  });
+}
+
 export async function cacheGet(key: string): Promise<string | null> {
   if (redis && redisAvailable) {
-    return redis.get(key);
+    try {
+      return await withRedisTimeout(redis.get(key));
+    } catch {
+      redisAvailable = false;
+    }
   }
   const entry = memoryCache.get(key);
   if (!entry) return null;
@@ -73,16 +94,24 @@ export async function cacheGet(key: string): Promise<string | null> {
 
 export async function cacheSet(key: string, value: string, ttlSeconds = 300): Promise<void> {
   if (redis && redisAvailable) {
-    await redis.setex(key, ttlSeconds, value);
-    return;
+    try {
+      await withRedisTimeout(redis.setex(key, ttlSeconds, value));
+      return;
+    } catch {
+      redisAvailable = false;
+    }
   }
   memoryCache.set(key, { value, expiresAt: Date.now() + ttlSeconds * 1000 });
 }
 
 export async function cacheDel(key: string): Promise<void> {
   if (redis && redisAvailable) {
-    await redis.del(key);
-    return;
+    try {
+      await withRedisTimeout(redis.del(key));
+      return;
+    } catch {
+      redisAvailable = false;
+    }
   }
   memoryCache.delete(key);
 }
