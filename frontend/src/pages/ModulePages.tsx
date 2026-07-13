@@ -2409,26 +2409,25 @@ export function AccountingPage() {
         }>;
       },
   });
-  // Expenses are always stored in company default (base) currency for P&L
-  const expenseCurrency = (expenses?.baseCurrency || expenses?.currency || baseCurrency || 'USD').toUpperCase();
-  const entryCurrency = (displayCurrency || expenseCurrency).toUpperCase();
+  // Selected top-bar currency — expense entry is always 1:1 in this currency
+  const selectedCurrency = (displayCurrency || baseCurrency || 'USD').toUpperCase();
 
   const addExpense = useMutation({
     mutationFn: async () => {
-      // Convert from the currency shown in the form → company base before save
-      const amountBase = parseMoneyToBase(expForm.amount);
-      if (!Number.isFinite(amountBase) || amountBase <= 0) throw new Error('Enter a valid amount');
+      // 1 typed unit = 1 unit of the selected currency (no client-side FX)
+      const amount = parseFloat(String(expForm.amount).replace(/,/g, ''));
+      if (!Number.isFinite(amount) || amount <= 0) throw new Error('Enter a valid amount');
       return api.post('/expenses', {
         category: expForm.category,
         description: expForm.description || null,
-        amount: amountBase,
-        // Explicit base: server also normalizes to company default currency
-        currency: expenseCurrency,
+        amount,
+        // Tell the API which currency the amount is in (user selection)
+        currency: selectedCurrency,
         expenseDate: expForm.expenseDate,
       });
     },
     onSuccess: () => {
-      toast.success(`Expense recorded in ${expenseCurrency}`);
+      toast.success(`Expense recorded · ${selectedCurrency}`);
       setExpForm((f) => ({ ...f, description: '', amount: '' }));
       qc.invalidateQueries({ queryKey: ['expenses'] });
       qc.invalidateQueries({ queryKey: ['profit-report'] });
@@ -2450,7 +2449,7 @@ export function AccountingPage() {
   return (
     <PageShell
       title="Accounting"
-      description={`P&L & expenses in company default currency (${expenseCurrency})`}
+      description={`Expenses follow your selected currency (${selectedCurrency}) — 1 = 1`}
     >
       {profit && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
@@ -2481,12 +2480,9 @@ export function AccountingPage() {
         <CardHeader>
           <CardTitle className="text-base">Record expense</CardTitle>
           <CardDescription>
-            Rent, salaries, utilities — stored and deducted in company default currency{' '}
-            <strong>{expenseCurrency}</strong>
-            {entryCurrency !== expenseCurrency
-              ? ` (you enter in ${entryCurrency}; we convert to ${expenseCurrency})`
-              : ''}
-            . Net profit = gross profit − expenses.
+            Amount is <strong>1:1</strong> in your selected currency{' '}
+            <strong>{selectedCurrency}</strong> (change it from the top bar). Net profit = gross
+            profit − expenses.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-5">
@@ -2512,13 +2508,13 @@ export function AccountingPage() {
             <Input
               type="number"
               inputMode="decimal"
-              placeholder={`Amount (${entryCurrency})`}
+              placeholder={`Amount (1 = 1 ${selectedCurrency})`}
               value={expForm.amount}
               onChange={(e) => setExpForm({ ...expForm, amount: e.target.value })}
               className="pr-14"
             />
             <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-muted-foreground">
-              {entryCurrency}
+              {selectedCurrency}
             </span>
           </div>
           <Input
@@ -2533,12 +2529,12 @@ export function AccountingPage() {
       </Card>
 
       <DataTable
-        columns={['Date', 'Category', 'Description', `Amount (${expenseCurrency})`, '']}
+        columns={['Date', 'Category', 'Description', `Amount (${selectedCurrency})`, '']}
         rows={(expenses?.rows || []).map((r) => [
           formatDate(r.expenseDate),
           r.category,
           r.description || '—',
-          // Stored in base — formatCurrency converts to display currency for the UI
+          // Stored in base after convert; shown in the currency you have selected
           formatCurrency(Number(r.amount)),
           <Button
             key="d"

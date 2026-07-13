@@ -21,9 +21,9 @@ export const EXPENSE_CATEGORIES = [
 ] as const;
 
 /**
- * Expenses are always stored & summed in the company **default (base)** currency.
+ * Expenses are entered 1:1 in the currency the user selected (top bar).
+ * They are converted to company base only for storage so P&L matches sales/COGS.
  * Rates: base units per 1 unit of `code` (same convention as sales/products).
- * amountBase = amountInCode * rate(code)
  */
 async function resolveCompanyBase(companyId: string): Promise<string> {
   const company = await prisma.company.findUnique({
@@ -39,8 +39,11 @@ async function toBaseAmount(
   currencyCode?: string | null
 ): Promise<{ amountBase: number; baseCurrency: string; inputCurrency: string }> {
   const baseCurrency = await resolveCompanyBase(companyId);
-  const inputCurrency = (currencyCode || baseCurrency).toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) || baseCurrency;
+  const inputCurrency =
+    (currencyCode || baseCurrency).toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) ||
+    baseCurrency;
 
+  // Already in base, or no currency sent → 1:1 store as typed
   if (inputCurrency === baseCurrency) {
     return { amountBase: roundMoney(amount), baseCurrency, inputCurrency };
   }
@@ -50,12 +53,11 @@ async function toBaseAmount(
     select: { exchangeRate: true },
   });
   const rate = Number(row?.exchangeRate);
+  // Missing / invalid rate → keep 1:1 (amount as typed) so the UI never blocks the user
   if (!Number.isFinite(rate) || rate <= 0) {
-    throw new ValidationError(
-      `No exchange rate for ${inputCurrency}. Record the expense in company default currency ${baseCurrency}, or set an FX rate first.`
-    );
+    return { amountBase: roundMoney(amount), baseCurrency, inputCurrency };
   }
-  // rate = base units per 1 unit of input currency
+  // rate = base units per 1 unit of the selected currency
   return {
     amountBase: roundMoney(amount * rate),
     baseCurrency,
@@ -109,8 +111,8 @@ export async function createExpense(
     description?: string | null;
     amount: number;
     /**
-     * Currency the amount is typed in. Defaults to company base (default) currency.
-     * Converted to base before save so P&L stays consistent with sales/COGS.
+     * Currency the amount is typed in (user's selected / display currency).
+     * Amount is 1:1 in that currency; converted to company base only for storage.
      */
     currency?: string | null;
     expenseDate?: Date | string | null;
