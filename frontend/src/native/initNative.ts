@@ -10,7 +10,7 @@ export async function initNativeApp(): Promise<void> {
     document.documentElement.dataset.platform = Capacitor.getPlatform();
   }
 
-  // Re-apply system font after platform is known so Android uses real device typeface
+  // Re-apply font after platform is known so Android uses real device typeface (sans-serif)
   try {
     const { applyAppFont } = await import('@/lib/fonts');
     const raw = localStorage.getItem('eims-theme');
@@ -23,6 +23,8 @@ export async function initNativeApp(): Promise<void> {
         /* ignore */
       }
     }
+    // Default / missing → device system font
+    if (!fontId) fontId = 'system';
     await applyAppFont(fontId);
   } catch (e) {
     console.warn('[native] font apply failed', e);

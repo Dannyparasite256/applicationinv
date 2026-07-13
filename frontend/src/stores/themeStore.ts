@@ -15,6 +15,7 @@ export const useThemeStore = create<ThemeState>()(
   persist(
     (set, get) => ({
       theme: 'light',
+      /** Always start as device system font unless user picks another */
       fontId: 'system',
       toggle: () => {
         const next = get().theme === 'light' ? 'dark' : 'light';
@@ -27,15 +28,17 @@ export const useThemeStore = create<ThemeState>()(
       },
       setFontId: (fontId) => {
         // Persist choice immediately; font file may still be downloading
-        set({ fontId });
-        void applyAppFont(fontId);
+        set({ fontId: fontId || 'system' });
+        void applyAppFont(fontId || 'system');
       },
     }),
     {
       name: 'eims-theme',
+      partialize: (s) => ({ theme: s.theme, fontId: s.fontId || 'system' }),
       onRehydrateStorage: () => (state) => {
-        // After persist rehydrate, apply saved font (or system default)
-        void applyAppFont(state?.fontId || 'system');
+        // After persist rehydrate, apply saved font (or device system default)
+        const id = state?.fontId || 'system';
+        void applyAppFont(id);
         if (state?.theme === 'dark') {
           document.documentElement.classList.add('dark');
         }

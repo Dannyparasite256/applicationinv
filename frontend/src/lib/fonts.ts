@@ -52,23 +52,29 @@ export function getSystemFontStack(): string {
   }
 
   if (platform === 'android') {
+    // Generic family only → Typeface.DEFAULT (device / user system font)
     return 'sans-serif';
   }
   if (platform === 'ios') {
     return '-apple-system, system-ui, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif';
   }
-  return 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif';
+  // Desktop browsers: use OS UI font (Segoe on Windows, SF on Mac, etc.)
+  return 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif';
 }
 
-export const SYSTEM_FONT_STACK = getSystemFontStack();
+/** Live stack (do not cache at import — platform may be set after first module load). */
+export function getDefaultSystemFontStack(): string {
+  return getSystemFontStack();
+}
 
 export const APP_FONTS: AppFontOption[] = [
   {
     id: 'system',
-    label: 'Phone system font',
-    description: 'Exact device font — same idea as WhatsApp',
-    family: 'sans-serif',
-    stack: 'sans-serif, system-ui, -apple-system, sans-serif',
+    label: 'Device default font',
+    description: 'Uses your phone or computer system font',
+    family: 'system-ui',
+    // Resolved dynamically in resolveStack() for the real device face
+    stack: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
     google: null,
     bunny: null,
   },

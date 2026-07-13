@@ -1,5 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { Capacitor } from '@capacitor/core';
 import App from './App';
 import './index.css';
 import { initNativeApp } from './native/initNative';
@@ -10,27 +11,38 @@ if (!localStorage.getItem('deviceId')) {
   localStorage.setItem('deviceId', crypto.randomUUID());
 }
 
+// Mark native platform ASAP so system font stack uses the real device typeface
+// (Android: generic sans-serif → OEM default; not a frozen "Roboto" webfont name).
+try {
+  if (Capacitor.isNativePlatform()) {
+    document.documentElement.classList.add('native-app');
+    document.documentElement.dataset.platform = Capacitor.getPlatform();
+  }
+} catch {
+  /* web */
+}
+
 // Apply theme + font early (before paint).
-// Default is always the phone system font (WhatsApp-style) unless user picked another in Settings.
+// Default is always the device system font unless the user chose another in Settings → Fonts.
 const theme = localStorage.getItem('eims-theme');
+let earlyFontId = 'system';
 if (theme) {
   try {
     const parsed = JSON.parse(theme);
     if (parsed.state?.theme === 'dark') {
       document.documentElement.classList.add('dark');
     }
-    void applyAppFont(parsed.state?.fontId || 'system');
+    // Only accept a known custom id; anything else → system
+    const saved = parsed.state?.fontId as string | undefined;
+    earlyFontId = saved && saved !== 'system' ? saved : 'system';
   } catch {
-    void applyAppFont('system');
+    earlyFontId = 'system';
   }
-} else {
-  void applyAppFont('system');
 }
-// Ensure system class exists before first paint if default
-if (!document.documentElement.dataset.font) {
-  document.documentElement.classList.add('font-system');
-  document.documentElement.dataset.font = 'system';
-}
+// Default path: device system font
+document.documentElement.classList.add(earlyFontId === 'system' ? 'font-system' : 'font-custom');
+document.documentElement.dataset.font = earlyFontId;
+void applyAppFont(earlyFontId);
 
 // Theme preset (clean / night / contrast)
 try {

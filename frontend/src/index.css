@@ -77,12 +77,13 @@
 
   :root {
     /*
-     * Default = phone system font (WhatsApp-style).
-     * On Android WebView, generic `sans-serif` maps to Typeface.DEFAULT
-     * (Roboto or the OEM / user system font — not a downloaded web font).
+     * Default = device system font (not a downloaded webfont).
+     * Android WebView: generic `sans-serif` → Typeface.DEFAULT (OEM face).
+     * iOS: -apple-system / SF. Desktop: system-ui / Segoe UI / etc.
+     * applyAppFont('system') overwrites these with the correct stack per platform.
      */
-    --font-sans: sans-serif;
-    --font-display: sans-serif;
+    --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-display: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     --font-tracking: 0;
     /* Compact layout tokens — content fits phone X/Y without waste or overflow */
     --app-topbar-h: 3.25rem;
