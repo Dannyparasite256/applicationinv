@@ -48,6 +48,7 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- Contacts → fill customer name/phone from phonebook when registering -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.WRITE_CONTACTS" />
     <!-- Location → local display currency (GPS / network) -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
