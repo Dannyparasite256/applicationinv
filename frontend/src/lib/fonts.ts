@@ -1,7 +1,9 @@
 /**
  * App typography.
- * - "system" = device OS font (Android sans-serif / iOS SF)
+ * - "system" = device OS font (Android sans-serif / iOS SF / desktop system-ui)
  * - Others = loaded webfonts (Google Fonts, with Bunny CDN fallback)
+ *
+ * Default for new installs and when no preference is saved: device system font.
  */
 
 import { Capacitor } from '@capacitor/core';
@@ -34,22 +36,68 @@ export type AppFontOption = {
   bunny: string | null;
 };
 
+const KNOWN_FONT_IDS = new Set<string>([
+  'system',
+  'inter',
+  'jakarta',
+  'roboto',
+  'opensans',
+  'lato',
+  'montserrat',
+  'nunito',
+  'poppins',
+  'rubik',
+  'worksans',
+  'sourcesans',
+]);
+
+/** True only for a known selectable font id (unknown → treat as system). */
+export function isValidFontId(id: string | null | undefined): id is AppFontId {
+  return typeof id === 'string' && KNOWN_FONT_IDS.has(id);
+}
+
+/** Normalize any stored/user value to a safe font id (default: system). */
+export function normalizeFontId(id: string | null | undefined): AppFontId {
+  if (isValidFontId(id)) return id;
+  return 'system';
+}
+
+/**
+ * Detect platform for system font resolution.
+ * Prefer Capacitor, then data-platform (set early from UA), then userAgent.
+ */
+export function detectFontPlatform(): 'android' | 'ios' | 'web' {
+  try {
+    if (typeof document !== 'undefined' && document.documentElement.dataset.platform) {
+      const p = document.documentElement.dataset.platform;
+      if (p === 'android' || p === 'ios') return p;
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    if (Capacitor.isNativePlatform()) {
+      const p = Capacitor.getPlatform();
+      if (p === 'android' || p === 'ios') return p;
+    }
+  } catch {
+    /* ignore */
+  }
+  if (typeof navigator !== 'undefined') {
+    const ua = navigator.userAgent || '';
+    if (/Android/i.test(ua)) return 'android';
+    if (/iPhone|iPad|iPod/i.test(ua)) return 'ios';
+  }
+  return 'web';
+}
+
 /**
  * Resolve the real device system font stack (WhatsApp-style).
  * Must not name "Roboto" / "Inter" first on Android — that freezes the font
  * and ignores the phone's default / user-selected system typeface.
  */
 export function getSystemFontStack(): string {
-  let platform = 'web';
-  try {
-    if (typeof document !== 'undefined' && document.documentElement.dataset.platform) {
-      platform = document.documentElement.dataset.platform;
-    } else if (Capacitor.isNativePlatform()) {
-      platform = Capacitor.getPlatform();
-    }
-  } catch {
-    /* ignore */
-  }
+  const platform = detectFontPlatform();
 
   if (platform === 'android') {
     // Generic family only → Typeface.DEFAULT (device / user system font)
@@ -67,11 +115,22 @@ export function getDefaultSystemFontStack(): string {
   return getSystemFontStack();
 }
 
+/** Ensure data-platform is set so CSS android/ios system rules match. */
+export function ensurePlatformDataset(): void {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  if (root.dataset.platform === 'android' || root.dataset.platform === 'ios') return;
+  const platform = detectFontPlatform();
+  if (platform === 'android' || platform === 'ios') {
+    root.dataset.platform = platform;
+  }
+}
+
 export const APP_FONTS: AppFontOption[] = [
   {
     id: 'system',
     label: 'Device default font',
-    description: 'Uses your phone or computer system font',
+    description: 'Default — uses your phone or computer system font',
     family: 'system-ui',
     // Resolved dynamically in resolveStack() for the real device face
     stack: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
@@ -184,7 +243,8 @@ const GOOGLE_PREVIEW_LINK_ID = 'eims-app-font-preview';
 const PRECONNECT_IDS = ['eims-font-preconnect-g', 'eims-font-preconnect-gs', 'eims-font-preconnect-b'];
 
 export function getFontOption(id: string | null | undefined): AppFontOption {
-  return APP_FONTS.find((f) => f.id === id) || APP_FONTS[0];
+  const safe = normalizeFontId(id);
+  return APP_FONTS.find((f) => f.id === safe) || APP_FONTS[0];
 }
 
 function resolveStack(font: AppFontOption): string {
@@ -344,12 +404,24 @@ function paintStack(stack: string, fontId: string) {
   if (document.body) {
     document.body.style.fontFamily = stack;
   }
+  const appRoot = document.getElementById('root');
+  if (appRoot) {
+    appRoot.style.fontFamily = stack;
+  }
+}
+
+function stripWebFontStylesheets() {
+  if (typeof document === 'undefined') return;
+  document.getElementById(GOOGLE_LINK_ID)?.remove();
+  document.getElementById(GOOGLE_PREVIEW_LINK_ID)?.remove();
 }
 
 /**
  * Apply font to the whole app. Waits for webfont download when needed.
+ * Default / unknown id → device system font.
  */
 export async function applyAppFont(fontId: AppFontId | string): Promise<boolean> {
+  ensurePlatformDataset();
   const font = getFontOption(fontId);
   const stack = resolveStack(font);
   const root = document.documentElement;
@@ -358,8 +430,11 @@ export async function applyAppFont(fontId: AppFontId | string): Promise<boolean>
     root.style.setProperty('--font-tracking', '0');
     root.classList.add('font-system');
     root.classList.remove('font-custom');
-    // Remove active webfont stylesheet so system face wins
-    document.getElementById(GOOGLE_LINK_ID)?.remove();
+    // Remove webfont stylesheets so the device face wins (no downloaded Roboto/Inter)
+    stripWebFontStylesheets();
+    paintStack(stack, font.id);
+    // Force a style recalculation so Android WebView drops any cached face
+    void root.offsetWidth;
     paintStack(stack, font.id);
     return true;
   }

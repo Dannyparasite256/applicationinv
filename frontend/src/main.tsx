@@ -4,7 +4,7 @@ import { Capacitor } from '@capacitor/core';
 import App from './App';
 import './index.css';
 import { initNativeApp } from './native/initNative';
-import { applyAppFont } from './lib/fonts';
+import { applyAppFont, ensurePlatformDataset, normalizeFontId } from './lib/fonts';
 
 // Ensure device id for session tracking
 if (!localStorage.getItem('deviceId')) {
@@ -17,9 +17,11 @@ try {
   if (Capacitor.isNativePlatform()) {
     document.documentElement.classList.add('native-app');
     document.documentElement.dataset.platform = Capacitor.getPlatform();
+  } else {
+    ensurePlatformDataset();
   }
 } catch {
-  /* web */
+  ensurePlatformDataset();
 }
 
 // Apply theme + font early (before paint).
@@ -32,15 +34,15 @@ if (theme) {
     if (parsed.state?.theme === 'dark') {
       document.documentElement.classList.add('dark');
     }
-    // Only accept a known custom id; anything else → system
-    const saved = parsed.state?.fontId as string | undefined;
-    earlyFontId = saved && saved !== 'system' ? saved : 'system';
+    // Only accept a known id; unknown / missing → device system font
+    earlyFontId = normalizeFontId(parsed.state?.fontId as string | undefined);
   } catch {
     earlyFontId = 'system';
   }
 }
 // Default path: device system font
 document.documentElement.classList.add(earlyFontId === 'system' ? 'font-system' : 'font-custom');
+document.documentElement.classList.remove(earlyFontId === 'system' ? 'font-custom' : 'font-system');
 document.documentElement.dataset.font = earlyFontId;
 void applyAppFont(earlyFontId);
 

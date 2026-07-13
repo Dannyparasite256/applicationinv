@@ -80,9 +80,10 @@
   :root {
     /*
      * Default = device system font (not a downloaded webfont).
-     * Android WebView: generic `sans-serif` → Typeface.DEFAULT (OEM face).
+     * Android WebView: generic `sans-serif` → Typeface.DEFAULT (OEM / user font).
      * iOS: -apple-system / SF. Desktop: system-ui / Segoe UI / etc.
      * applyAppFont('system') overwrites these with the correct stack per platform.
+     * Early bootstrap in index.html may already set these before this CSS loads.
      */
     --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     --font-display: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -147,18 +148,24 @@
    */
   html.font-system,
   html.font-system body,
+  html.font-system #root,
   html.font-system button,
   html.font-system input,
   html.font-system select,
   html.font-system textarea,
   html.font-system optgroup,
+  html.font-system label,
+  html.font-system .font-sans,
   html.font-custom,
   html.font-custom body,
+  html.font-custom #root,
   html.font-custom button,
   html.font-custom input,
   html.font-custom select,
   html.font-custom textarea,
-  html.font-custom optgroup {
+  html.font-custom optgroup,
+  html.font-custom label,
+  html.font-custom .font-sans {
     font-family: var(--font-sans) !important;
   }
 
@@ -173,16 +180,43 @@
     font-family: var(--font-display) !important;
   }
 
+  /* Keep mono utilities readable under the forced system stack */
+  html.font-system .font-mono,
+  html.font-system .font-mono *,
+  html.font-custom .font-mono,
+  html.font-custom .font-mono * {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+  }
+
   /* Android: pure generic family = device system typeface (only in system mode) */
   html[data-platform="android"].font-system {
     --font-sans: sans-serif !important;
     --font-display: sans-serif !important;
   }
 
+  html[data-platform="android"].font-system,
+  html[data-platform="android"].font-system body,
+  html[data-platform="android"].font-system #root {
+    font-family: sans-serif !important;
+  }
+
   /* iOS: SF Pro / system UI (only in system mode) */
   html[data-platform="ios"].font-system {
     --font-sans: -apple-system, system-ui, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif !important;
     --font-display: -apple-system, system-ui, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif !important;
+  }
+
+  html[data-platform="ios"].font-system,
+  html[data-platform="ios"].font-system body,
+  html[data-platform="ios"].font-system #root {
+    font-family: -apple-system, system-ui, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif !important;
+  }
+
+  /* Native shell (Capacitor): reinforce system face when default is selected */
+  html.native-app.font-system[data-platform="android"],
+  html.native-app.font-system[data-platform="android"] body,
+  html.native-app.font-system[data-platform="android"] #root {
+    font-family: sans-serif !important;
   }
 
   #root {

@@ -49,9 +49,10 @@ export default {
         sm: 'calc(var(--radius) - 4px)',
       },
       fontFamily: {
-        // Driven by CSS vars — default is phone system font (Android: sans-serif typeface)
-        sans: ['var(--font-sans)', 'sans-serif'],
-        display: ['var(--font-display)', 'var(--font-sans)', 'sans-serif'],
+        // Driven by CSS vars — default is device system font (Android: sans-serif → Typeface.DEFAULT)
+        // String form keeps multi-family stacks in --font-sans intact
+        sans: ['var(--font-sans)'],
+        display: ['var(--font-display)'],
       },
       boxShadow: {
         glass: '0 8px 32px 0 rgba(15, 23, 42, 0.12)',

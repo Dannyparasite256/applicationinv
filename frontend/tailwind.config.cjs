@@ -49,8 +49,9 @@ module.exports = {
         sm: 'calc(var(--radius) - 4px)',
       },
       fontFamily: {
-        sans: ['var(--font-sans)', 'sans-serif'],
-        display: ['var(--font-display)', 'var(--font-sans)', 'sans-serif'],
+        // Default = device system font via --font-sans (Android: sans-serif)
+        sans: ['var(--font-sans)'],
+        display: ['var(--font-display)'],
       },
       boxShadow: {
         glass: '0 8px 32px 0 rgba(15, 23, 42, 0.12)',

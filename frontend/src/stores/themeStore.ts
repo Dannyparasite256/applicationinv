@@ -1,10 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { applyAppFont, type AppFontId } from '@/lib/fonts';
+import { applyAppFont, normalizeFontId, type AppFontId } from '@/lib/fonts';
 
 interface ThemeState {
   theme: 'light' | 'dark';
-  /** App body + headings font. Default: phone system font */
+  /** App body + headings font. Default: device system font */
   fontId: AppFontId;
   toggle: () => void;
   setTheme: (theme: 'light' | 'dark') => void;
@@ -27,17 +27,30 @@ export const useThemeStore = create<ThemeState>()(
         set({ theme });
       },
       setFontId: (fontId) => {
+        const id = normalizeFontId(fontId);
         // Persist choice immediately; font file may still be downloading
-        set({ fontId: fontId || 'system' });
-        void applyAppFont(fontId || 'system');
+        set({ fontId: id });
+        void applyAppFont(id);
       },
     }),
     {
       name: 'eims-theme',
-      partialize: (s) => ({ theme: s.theme, fontId: s.fontId || 'system' }),
+      partialize: (s) => ({ theme: s.theme, fontId: normalizeFontId(s.fontId) }),
+      merge: (persisted, current) => {
+        const p = (persisted || {}) as Partial<ThemeState>;
+        return {
+          ...current,
+          ...p,
+          // Invalid / missing stored font → device system default
+          fontId: normalizeFontId(p.fontId ?? current.fontId),
+        };
+      },
       onRehydrateStorage: () => (state) => {
         // After persist rehydrate, apply saved font (or device system default)
-        const id = state?.fontId || 'system';
+        const id = normalizeFontId(state?.fontId);
+        if (state && state.fontId !== id) {
+          state.fontId = id;
+        }
         void applyAppFont(id);
         if (state?.theme === 'dark') {
           document.documentElement.classList.add('dark');

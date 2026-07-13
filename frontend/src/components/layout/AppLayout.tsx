@@ -8,7 +8,7 @@ import { OfflineBanner } from '@/components/shared/OfflineBanner';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { useCurrencyStore } from '@/stores/currencyStore';
-import { applyAppFont } from '@/lib/fonts';
+import { applyAppFont, normalizeFontId } from '@/lib/fonts';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { useCurrencyBootstrap } from '@/hooks/useCurrencyBootstrap';
 import { fetchMe } from '@/services/auth.service';
@@ -69,8 +69,9 @@ export function AppLayout() {
   }, [theme]);
 
   // Keep font CSS vars in sync (persist rehydrate + user changes)
+  // Default / invalid → device system font
   useEffect(() => {
-    applyAppFont(fontId || 'system');
+    void applyAppFont(normalizeFontId(fontId));
   }, [fontId]);
 
   if (!accessToken) {
