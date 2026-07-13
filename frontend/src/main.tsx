@@ -51,7 +51,7 @@ document.documentElement.classList.remove(earlyFontId === 'system' ? 'font-custo
 document.documentElement.dataset.font = earlyFontId;
 void applyAppFont(earlyFontId);
 
-// Theme preset (clean / night / contrast)
+// Theme preset (clean / night / contrast) + UI style (normal / liquid glass)
 try {
   const prefs = localStorage.getItem('eims-prefs');
   if (prefs) {
@@ -59,9 +59,16 @@ try {
     const preset = parsed?.state?.themePreset || 'clean';
     document.documentElement.classList.add(`theme-${preset}`);
     if (preset === 'night') document.documentElement.classList.add('dark');
+    const uiStyle = parsed?.state?.uiStyle === 'liquid' ? 'liquid' : 'normal';
+    document.documentElement.classList.toggle('ui-liquid', uiStyle === 'liquid');
+    document.documentElement.classList.toggle('ui-normal', uiStyle !== 'liquid');
+    document.documentElement.dataset.uiStyle = uiStyle;
+  } else {
+    document.documentElement.classList.add('ui-normal');
+    document.documentElement.dataset.uiStyle = 'normal';
   }
 } catch {
-  /* ignore */
+  document.documentElement.classList.add('ui-normal');
 }
 
 /** Ping the API so free-tier hosts (Render) wake before the first real request. */

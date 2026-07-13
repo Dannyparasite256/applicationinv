@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
@@ -36,6 +37,7 @@ import { StaffPage } from '@/pages/admin/StaffPage';
 import { SyncCenterPage } from '@/pages/SyncCenterPage';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import { useAuthStore } from '@/stores/authStore';
+import { applyUiStyle, usePreferencesStore } from '@/stores/preferencesStore';
 import { canAccessPath, getDefaultHome } from '@/lib/roleAccess';
 
 const queryClient = new QueryClient({
@@ -94,11 +96,21 @@ function Guard({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** Keeps liquid glass / normal style applied on login + all routes */
+function UiStyleSync() {
+  const uiStyle = usePreferencesStore((s) => s.uiStyle);
+  useEffect(() => {
+    applyUiStyle(uiStyle || 'normal');
+  }, [uiStyle]);
+  return null;
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
+          <UiStyleSync />
           <Routes>
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route

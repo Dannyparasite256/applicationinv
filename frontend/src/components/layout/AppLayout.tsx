@@ -11,6 +11,7 @@ import { useCurrencyStore } from '@/stores/currencyStore';
 import { applyAppFont, normalizeFontId } from '@/lib/fonts';
 import { applyDocumentTheme, normalizeThemeMode } from '@/lib/theme';
 import { ensureSystemThemeWatch } from '@/stores/themeStore';
+import { applyUiStyle, usePreferencesStore } from '@/stores/preferencesStore';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { useCurrencyBootstrap } from '@/hooks/useCurrencyBootstrap';
 import { fetchMe } from '@/services/auth.service';
@@ -20,6 +21,7 @@ export function AppLayout() {
   const setUser = useAuthStore((s) => s.setUser);
   const theme = useThemeStore((s) => s.theme);
   const fontId = useThemeStore((s) => s.fontId);
+  const uiStyle = usePreferencesStore((s) => s.uiStyle);
   // Subscribe so the whole app shell re-renders when currency / rates change.
   // formatCurrency() reads the store at render time — without this, open pages stay stale.
   const currencyUiKey = useCurrencyStore(
@@ -79,6 +81,11 @@ export function AppLayout() {
   useEffect(() => {
     void applyAppFont(normalizeFontId(fontId));
   }, [fontId]);
+
+  // Liquid glass vs normal solid UI
+  useEffect(() => {
+    applyUiStyle(uiStyle || 'normal');
+  }, [uiStyle]);
 
   if (!accessToken) {
     return <Navigate to="/login" replace />;

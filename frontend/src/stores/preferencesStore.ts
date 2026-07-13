@@ -3,6 +3,8 @@ import { persist } from 'zustand/middleware';
 
 export type ThemePreset = 'clean' | 'night' | 'contrast';
 export type LabelMode = 'normal' | 'simple';
+/** Visual surface style — liquid glass can be turned off for a solid "normal" UI */
+export type UiStyle = 'normal' | 'liquid';
 
 export type OnboardingStepId =
   | 'logo'
@@ -15,6 +17,8 @@ interface PreferencesState {
   soundsEnabled: boolean;
   hapticsEnabled: boolean;
   themePreset: ThemePreset;
+  /** Default "normal"; set "liquid" for frosted glass surfaces app-wide */
+  uiStyle: UiStyle;
   labelMode: LabelMode;
   posFavorites: string[];
   posRecent: Array<{ id: string; at: number }>;
@@ -24,6 +28,7 @@ interface PreferencesState {
   setSoundsEnabled: (v: boolean) => void;
   setHapticsEnabled: (v: boolean) => void;
   setThemePreset: (p: ThemePreset) => void;
+  setUiStyle: (s: UiStyle) => void;
   setLabelMode: (m: LabelMode) => void;
   setPosDefaultPayment: (m: string) => void;
   toggleFavorite: (productId: string) => void;
@@ -46,12 +51,27 @@ function applyThemePreset(preset: ThemePreset) {
   }
 }
 
+export function normalizeUiStyle(v: string | null | undefined): UiStyle {
+  return v === 'liquid' ? 'liquid' : 'normal';
+}
+
+/** Apply liquid glass vs solid surfaces on <html>. */
+export function applyUiStyle(style: UiStyle | string | null | undefined) {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  const s = normalizeUiStyle(style as string);
+  root.classList.toggle('ui-liquid', s === 'liquid');
+  root.classList.toggle('ui-normal', s !== 'liquid');
+  root.dataset.uiStyle = s;
+}
+
 export const usePreferencesStore = create<PreferencesState>()(
   persist(
     (set, get) => ({
       soundsEnabled: false,
       hapticsEnabled: true,
       themePreset: 'clean',
+      uiStyle: 'normal',
       labelMode: 'normal',
       posFavorites: [],
       posRecent: [],
@@ -64,6 +84,11 @@ export const usePreferencesStore = create<PreferencesState>()(
       setThemePreset: (themePreset) => {
         applyThemePreset(themePreset);
         set({ themePreset });
+      },
+      setUiStyle: (uiStyle) => {
+        const next = normalizeUiStyle(uiStyle);
+        applyUiStyle(next);
+        set({ uiStyle: next });
       },
       setLabelMode: (labelMode) => set({ labelMode }),
       setPosDefaultPayment: (posDefaultPayment) => set({ posDefaultPayment }),
@@ -96,8 +121,29 @@ export const usePreferencesStore = create<PreferencesState>()(
     }),
     {
       name: 'eims-prefs',
+      partialize: (s) => ({
+        soundsEnabled: s.soundsEnabled,
+        hapticsEnabled: s.hapticsEnabled,
+        themePreset: s.themePreset,
+        uiStyle: normalizeUiStyle(s.uiStyle),
+        labelMode: s.labelMode,
+        posFavorites: s.posFavorites,
+        posRecent: s.posRecent,
+        posDefaultPayment: s.posDefaultPayment,
+        onboardingDismissed: s.onboardingDismissed,
+        onboardingCompleted: s.onboardingCompleted,
+      }),
+      merge: (persisted, current) => {
+        const p = (persisted || {}) as Partial<PreferencesState>;
+        return {
+          ...current,
+          ...p,
+          uiStyle: normalizeUiStyle(p.uiStyle ?? current.uiStyle),
+        };
+      },
       onRehydrateStorage: () => (state) => {
         if (state?.themePreset) applyThemePreset(state.themePreset);
+        applyUiStyle(state?.uiStyle || 'normal');
       },
     }
   )

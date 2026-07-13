@@ -1031,3 +1031,278 @@
     height: 11rem;
   }
 }
+
+/* ---------------------------------------------------------------
+   Liquid Glass UI (toggle: html.ui-liquid)
+   Frosted translucent surfaces — switch back with ui-normal / Settings
+   --------------------------------------------------------------- */
+
+html.ui-liquid {
+  --glass-blur: 22px;
+  --glass-sat: 1.55;
+  --glass-bg: hsl(var(--card) / 0.52);
+  --glass-bg-strong: hsl(var(--card) / 0.68);
+  --glass-border: hsl(0 0% 100% / 0.38);
+  --glass-border-dark: hsl(0 0% 100% / 0.12);
+  --glass-highlight: linear-gradient(
+    145deg,
+    hsl(0 0% 100% / 0.45) 0%,
+    hsl(0 0% 100% / 0.08) 42%,
+    transparent 68%
+  );
+  --glass-shadow:
+    0 1px 0 0 hsl(0 0% 100% / 0.35) inset,
+    0 -1px 0 0 hsl(0 0% 0% / 0.04) inset,
+    0 12px 40px -12px hsl(224 47% 11% / 0.18),
+    0 4px 16px -4px hsl(239 84% 57% / 0.1);
+  --radius: 1.15rem;
+}
+
+html.ui-liquid.dark {
+  --glass-bg: hsl(var(--card) / 0.42);
+  --glass-bg-strong: hsl(var(--card) / 0.58);
+  --glass-border: hsl(0 0% 100% / 0.14);
+  --glass-border-dark: hsl(0 0% 0% / 0.35);
+  --glass-highlight: linear-gradient(
+    145deg,
+    hsl(0 0% 100% / 0.14) 0%,
+    hsl(0 0% 100% / 0.03) 45%,
+    transparent 70%
+  );
+  --glass-shadow:
+    0 1px 0 0 hsl(0 0% 100% / 0.1) inset,
+    0 16px 48px -12px hsl(0 0% 0% / 0.55),
+    0 0 0 1px hsl(0 0% 100% / 0.06);
+}
+
+/* Ambient liquid blobs behind the shell */
+html.ui-liquid .app-shell,
+html.ui-liquid .auth-shell {
+  position: relative;
+  isolation: isolate;
+}
+
+html.ui-liquid .app-shell::before,
+html.ui-liquid .auth-shell::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 70% 50% at 15% 10%, hsl(var(--primary) / 0.28), transparent 55%),
+    radial-gradient(ellipse 55% 45% at 90% 20%, hsl(var(--accent) / 0.22), transparent 50%),
+    radial-gradient(ellipse 50% 40% at 50% 95%, hsl(280 80% 60% / 0.12), transparent 55%),
+    radial-gradient(ellipse 40% 30% at 70% 60%, hsl(var(--primary) / 0.1), transparent 50%),
+    hsl(var(--background));
+  background-attachment: fixed;
+}
+
+html.ui-liquid.dark .app-shell::before,
+html.ui-liquid.dark .auth-shell::before {
+  background:
+    radial-gradient(ellipse 65% 45% at 20% 5%, hsl(var(--primary) / 0.35), transparent 55%),
+    radial-gradient(ellipse 50% 40% at 95% 15%, hsl(var(--accent) / 0.22), transparent 50%),
+    radial-gradient(ellipse 55% 35% at 40% 100%, hsl(280 70% 50% / 0.18), transparent 55%),
+    hsl(var(--background));
+}
+
+html.ui-liquid .bg-grid-fade {
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -10%, hsl(var(--primary) / 0.14), transparent),
+    radial-gradient(ellipse 40% 30% at 100% 0%, hsl(var(--accent) / 0.1), transparent) !important;
+}
+
+/* Shared glass surface recipe */
+html.ui-liquid .glass-surface {
+  background: var(--glass-bg) !important;
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  border-color: var(--glass-border) !important;
+  box-shadow: var(--glass-shadow);
+  position: relative;
+}
+
+html.ui-liquid .glass-surface::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: var(--glass-highlight);
+  opacity: 0.85;
+  z-index: 0;
+}
+
+/* Cards, KPIs, panels ? liquid glass */
+html.ui-liquid .rounded-2xl.border.bg-card,
+html.ui-liquid .rounded-xl.border.bg-card,
+html.ui-liquid .kpi-card,
+html.ui-liquid .surface-card,
+html.ui-liquid .attention-item,
+html.ui-liquid .panel-float,
+html.ui-liquid .glass {
+  background: var(--glass-bg) !important;
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  border-color: var(--glass-border) !important;
+  box-shadow: var(--glass-shadow) !important;
+}
+
+/* Tailwind bg-card utility when used with border */
+html.ui-liquid [class*='bg-card'] {
+  background-color: transparent;
+  background-image: linear-gradient(var(--glass-bg), var(--glass-bg));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+}
+
+html.ui-liquid [class*='bg-card'][class*='border'] {
+  border-color: var(--glass-border) !important;
+  box-shadow: var(--glass-shadow);
+}
+
+/* Top bar */
+html.ui-liquid .app-topbar {
+  background-color: transparent !important;
+  background: var(--glass-bg-strong) !important;
+  backdrop-filter: blur(calc(var(--glass-blur) + 6px)) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) + 6px)) saturate(var(--glass-sat));
+  border-bottom: 1px solid var(--glass-border);
+  box-shadow: 0 1px 0 0 hsl(0 0% 100% / 0.2) inset, 0 8px 24px -12px hsl(224 47% 11% / 0.12);
+}
+
+/* Bottom nav */
+html.ui-liquid .mobile-bottom-nav {
+  background: var(--glass-bg-strong) !important;
+  backdrop-filter: blur(calc(var(--glass-blur) + 8px)) saturate(var(--glass-sat)) !important;
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) + 8px)) saturate(var(--glass-sat)) !important;
+  border-top-color: var(--glass-border) !important;
+  box-shadow:
+    0 1px 0 0 hsl(0 0% 100% / 0.25) inset,
+    0 -12px 40px -16px hsl(224 47% 11% / 0.2) !important;
+}
+
+/* Sidebar */
+html.ui-liquid aside,
+html.ui-liquid .app-sidebar,
+html.ui-liquid [data-sidebar] {
+  background: var(--glass-bg-strong) !important;
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  border-color: var(--glass-border) !important;
+}
+
+/* Inputs / selects on glass */
+html.ui-liquid input:not([type='checkbox']):not([type='radio']),
+html.ui-liquid select,
+html.ui-liquid textarea,
+html.ui-liquid .field-control {
+  background: hsl(var(--background) / 0.45) !important;
+  backdrop-filter: blur(12px) saturate(1.3);
+  -webkit-backdrop-filter: blur(12px) saturate(1.3);
+  border-color: var(--glass-border) !important;
+}
+
+/* Buttons outline become glassy chips */
+html.ui-liquid button.border,
+html.ui-liquid a.border {
+  backdrop-filter: blur(10px) saturate(1.3);
+  -webkit-backdrop-filter: blur(10px) saturate(1.3);
+}
+
+/* Segmented controls */
+html.ui-liquid .segmented {
+  background: hsl(var(--muted) / 0.45) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-color: var(--glass-border) !important;
+}
+html.ui-liquid .segmented-item-active {
+  background: var(--glass-bg-strong) !important;
+  box-shadow: var(--glass-shadow) !important;
+  border-color: var(--glass-border) !important;
+}
+
+/* Tables — frosted header */
+html.ui-liquid thead,
+html.ui-liquid thead tr {
+  background: hsl(var(--muted) / 0.55) !important;
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+}
+
+/* Auth cards already have blur — enhance */
+html.ui-liquid .auth-shell [class*='rounded-2xl'],
+html.ui-liquid .auth-shell [class*='rounded-3xl'] {
+  background: var(--glass-bg-strong) !important;
+  backdrop-filter: blur(28px) saturate(1.6) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.6) !important;
+  border-color: var(--glass-border) !important;
+  box-shadow: var(--glass-shadow) !important;
+}
+
+/* Modals / dialogs */
+html.ui-liquid .font-preview-sheet,
+html.ui-liquid .product-modal,
+html.ui-liquid [role='dialog'] {
+  background: var(--glass-bg-strong) !important;
+  backdrop-filter: blur(calc(var(--glass-blur) + 10px)) saturate(var(--glass-sat)) !important;
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) + 10px)) saturate(var(--glass-sat)) !important;
+  border-color: var(--glass-border) !important;
+  box-shadow: var(--glass-shadow) !important;
+}
+
+/* Soften solid page background so blobs show through */
+html.ui-liquid .app-shell {
+  background-color: transparent !important;
+}
+
+html.ui-liquid body {
+  background-color: hsl(var(--background));
+}
+
+/* Prefer less blur on very small / low-power when reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  html.ui-liquid {
+    --glass-blur: 10px;
+    --glass-sat: 1.15;
+  }
+}
+
+/* Performance: slightly lighter blur on narrow phones */
+@media (max-width: 400px) {
+  html.ui-liquid {
+    --glass-blur: 16px;
+    --glass-sat: 1.35;
+  }
+}
+
+/* Explicit surface hook used by Card component */
+html.ui-liquid .ui-surface-card {
+  background: var(--glass-bg) !important;
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  border-color: var(--glass-border) !important;
+  box-shadow: var(--glass-shadow) !important;
+  overflow: hidden;
+}
+
+html.ui-liquid .ui-surface-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: var(--glass-highlight);
+  opacity: 0.7;
+}
+
+html.ui-liquid .ui-surface-card {
+  position: relative;
+}
+
+html.ui-liquid .ui-surface-card > * {
+  position: relative;
+  z-index: 1;
+}

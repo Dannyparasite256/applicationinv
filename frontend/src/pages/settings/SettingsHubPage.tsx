@@ -21,7 +21,7 @@ import { api, getErrorMessage } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { APP_FONTS } from '@/lib/fonts';
 import { useThemeStore } from '@/stores/themeStore';
-import { usePreferencesStore, type ThemePreset } from '@/stores/preferencesStore';
+import { usePreferencesStore, type ThemePreset, type UiStyle } from '@/stores/preferencesStore';
 import type { ThemeMode } from '@/lib/theme';
 import { resolveTheme } from '@/lib/theme';
 import { Button } from '@/components/ui/Button';
@@ -70,10 +70,12 @@ export function SettingsHubPage() {
   const soundsEnabled = usePreferencesStore((s) => s.soundsEnabled);
   const hapticsEnabled = usePreferencesStore((s) => s.hapticsEnabled);
   const themePreset = usePreferencesStore((s) => s.themePreset);
+  const uiStyle = usePreferencesStore((s) => s.uiStyle);
   const labelMode = usePreferencesStore((s) => s.labelMode);
   const setSoundsEnabled = usePreferencesStore((s) => s.setSoundsEnabled);
   const setHapticsEnabled = usePreferencesStore((s) => s.setHapticsEnabled);
   const setThemePreset = usePreferencesStore((s) => s.setThemePreset);
+  const setUiStyle = usePreferencesStore((s) => s.setUiStyle);
   const setLabelMode = usePreferencesStore((s) => s.setLabelMode);
   const currentFontLabel = APP_FONTS.find((f) => f.id === fontId)?.label || 'Phone system font';
   const [branchForm, setBranchForm] = useState({ code: '', name: '' });
@@ -251,7 +253,7 @@ export function SettingsHubPage() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Appearance</CardTitle>
-          <CardDescription>Theme and fonts</CardDescription>
+          <CardDescription>Theme, glass style, and fonts</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
@@ -275,6 +277,38 @@ export function SettingsHubPage() {
                 >
                   {opt.label}
                   {opt.id === 'system' && theme === 'system' ? ` (${resolveTheme('system')})` : ''}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-sm font-medium mb-2">Interface style</p>
+            <p className="text-xs text-muted-foreground mb-2">
+              Liquid glass uses frosted translucent panels. Switch to Normal anytime for solid surfaces.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  {
+                    id: 'normal' as UiStyle,
+                    label: 'Normal',
+                    hint: 'Solid cards',
+                  },
+                  {
+                    id: 'liquid' as UiStyle,
+                    label: 'Liquid glass',
+                    hint: 'Frosted blur',
+                  },
+                ]
+              ).map((opt) => (
+                <Button
+                  key={opt.id}
+                  size="sm"
+                  variant={uiStyle === opt.id ? 'default' : 'outline'}
+                  onClick={() => setUiStyle(opt.id)}
+                  title={opt.hint}
+                >
+                  {opt.label}
                 </Button>
               ))}
             </div>

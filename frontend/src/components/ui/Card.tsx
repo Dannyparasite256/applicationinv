@@ -5,7 +5,8 @@ export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn(
-        'rounded-2xl border border-border/60 bg-card text-card-foreground shadow-soft transition-all duration-300 hover:shadow-md min-w-0 max-w-full overflow-hidden',
+        // ui-surface-card is styled as solid or liquid glass via html.ui-liquid / ui-normal
+        'ui-surface-card rounded-2xl border border-border/60 bg-card text-card-foreground shadow-soft transition-all duration-300 hover:shadow-md min-w-0 max-w-full overflow-hidden',
         className
       )}
       {...props}
