@@ -1306,3 +1306,30 @@ html.ui-liquid .ui-surface-card > * {
   position: relative;
   z-index: 1;
 }
+
+/* Print / share menu — always centered in the viewport (portal to body) */
+.print-share-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 200 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0.75rem;
+  box-sizing: border-box;
+}
+
+.print-share-sheet {
+  width: 100%;
+  max-width: 32rem;
+  max-height: min(88dvh, 40rem);
+  margin: auto;
+}
+
+html.ui-liquid .print-share-sheet {
+  background: var(--glass-bg-strong) !important;
+  backdrop-filter: blur(calc(var(--glass-blur) + 8px)) saturate(var(--glass-sat)) !important;
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) + 8px)) saturate(var(--glass-sat)) !important;
+  border-color: var(--glass-border) !important;
+  box-shadow: var(--glass-shadow) !important;
+}

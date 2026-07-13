@@ -669,7 +669,19 @@ export function buildReceiptHtml(
     <button onclick="window.print()">Print</button>
     <button class="secondary" onclick="window.close()">Close</button>
   </div>
-  ${options?.autoPrint ? '<script>window.onload=function(){setTimeout(function(){window.print()},350)}</script>' : ''}
+  ${
+    options?.autoPrint
+      ? `<script>
+(function(){
+  function go(){ try { window.focus(); window.print(); } catch(e) {} }
+  if (document.readyState === 'complete') setTimeout(go, 200);
+  else window.addEventListener('load', function(){ setTimeout(go, 300); });
+  // Retry once — some browsers ignore the first print() after a blob open
+  setTimeout(go, 900);
+})();
+</script>`
+      : ''
+  }
 </body>
 </html>`;
 }
@@ -862,7 +874,18 @@ export function buildInvoiceHtml(
     <button onclick="window.print()">Print invoice</button>
     <button class="secondary" onclick="window.close()">Close</button>
   </div>
-  ${options?.autoPrint ? '<script>window.onload=function(){setTimeout(function(){window.print()},350)}</script>' : ''}
+  ${
+    options?.autoPrint
+      ? `<script>
+(function(){
+  function go(){ try { window.focus(); window.print(); } catch(e) {} }
+  if (document.readyState === 'complete') setTimeout(go, 200);
+  else window.addEventListener('load', function(){ setTimeout(go, 300); });
+  setTimeout(go, 900);
+})();
+</script>`
+      : ''
+  }
 </body>
 </html>`;
 }

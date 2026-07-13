@@ -148,11 +148,12 @@ export async function saveAndOpenFile(
       : blob
   );
   if (wantOpen && !wantShare) {
-    const w = window.open(url, '_blank', 'noopener,noreferrer');
+    const w = window.open(url, '_blank');
     if (!w) {
       const a = document.createElement('a');
       a.href = url;
       a.download = name;
+      a.rel = 'noopener';
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
       return 'downloaded';
@@ -164,14 +165,112 @@ export async function saveAndOpenFile(
   const a = document.createElement('a');
   a.href = url;
   a.download = name;
+  a.rel = 'noopener';
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
   return 'downloaded';
 }
 
+/**
+ * Print HTML in a new window (desktop/web) with reliable auto-print.
+ * Important: do NOT use "noopener" on window.open — modern browsers return null and
+ * writing document content fails silently.
+ */
+function printHtmlInBrowser(html: string, autoPrint: boolean): void {
+  // Prefer blob URL so we keep a window handle even with popup policies
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+
+  // No noopener — we need a usable Window reference on desktop
+  let w: Window | null = null;
+  try {
+    w = window.open(url, '_blank', 'width=920,height=1100');
+  } catch {
+    w = null;
+  }
+
+  if (w) {
+    // Wait for the blob document to load, then print
+    const tryPrint = () => {
+      try {
+        if (autoPrint) {
+          w!.focus();
+          // Double-rAF + timeout covers Chrome/Safari load timing
+          requestAnimationFrame(() => {
+            setTimeout(() => {
+              try {
+                w!.print();
+              } catch {
+                /* user can use on-page Print button */
+              }
+            }, 400);
+          });
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+
+    // blob pages fire load on the new window
+    w.addEventListener?.('load', tryPrint);
+    // Fallback if load already fired
+    setTimeout(tryPrint, 600);
+    setTimeout(() => URL.revokeObjectURL(url), 180_000);
+    return;
+  }
+
+  // Popup blocked — hidden iframe print (works on many desktop browsers)
+  const iframe = document.createElement('iframe');
+  iframe.setAttribute('title', 'Print');
+  iframe.style.cssText =
+    'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;';
+  document.body.appendChild(iframe);
+
+  const cleanup = () => {
+    try {
+      URL.revokeObjectURL(url);
+    } catch {
+      /* ignore */
+    }
+    setTimeout(() => {
+      try {
+        iframe.remove();
+      } catch {
+        /* ignore */
+      }
+    }, 60_000);
+  };
+
+  iframe.onload = () => {
+    try {
+      const doc = iframe.contentDocument || iframe.contentWindow?.document;
+      if (doc && !doc.body?.innerHTML) {
+        // Some browsers need write into iframe
+      }
+      if (autoPrint) {
+        setTimeout(() => {
+          try {
+            iframe.contentWindow?.focus();
+            iframe.contentWindow?.print();
+          } catch {
+            /* ignore */
+          }
+        }, 350);
+      }
+    } finally {
+      cleanup();
+    }
+  };
+
+  iframe.src = url;
+
+  // If iframe load never fires, still clean up
+  setTimeout(cleanup, 120_000);
+}
+
 /** Open authenticated HTML print view (browser) or PDF (native) for printing */
 export async function openPrintHtml(type: PrintDocType, id: string, autoPrint = true) {
-  // Native: open polished A4 PDF in system PDF app (Print from there)
+  // Native phone/tablet: open A4 PDF in system PDF app (Print from there — most reliable)
   if (Capacitor.isNativePlatform()) {
     await openPdf(type, id, {
       format: 'a4',
@@ -184,19 +283,18 @@ export async function openPrintHtml(type: PrintDocType, id: string, autoPrint = 
     return;
   }
 
-  const path = withCurrencyQuery(
-    type === 'receipt'
-      ? `/sales/${id}/print/html${autoPrint ? '?autoPrint=1' : ''}`
-      : `/invoices/${id}/print/html${autoPrint ? '?autoPrint=1' : ''}`
-  );
+  // Build path carefully so autoPrint + currency both apply
+  const basePath =
+    type === 'receipt' ? `/sales/${id}/print/html` : `/invoices/${id}/print/html`;
+  let path = withCurrencyQuery(basePath);
+  if (autoPrint) {
+    path += path.includes('?') ? '&autoPrint=1' : '?autoPrint=1';
+  }
+
   const res = await fetch(`${apiBase()}${path}`, { headers: authHeaders() });
   if (!res.ok) throw new Error('Failed to open print view');
   const html = await res.text();
-  const w = window.open('', '_blank', 'noopener,noreferrer,width=920,height=1100');
-  if (!w) throw new Error('Pop-up blocked. Allow pop-ups to print, or use Download PDF.');
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
+  printHtmlInBrowser(html, autoPrint);
 }
 
 /** Open PDF in system PDF reader (or download+share on phone) */
@@ -220,8 +318,9 @@ export async function openPdf(
       currency
     );
   } else {
+    const invBase = `/invoices/${id}/print/pdf`;
     path = withCurrencyQuery(
-      `/invoices/${id}/print/pdf${options?.download ? '?download=1' : ''}`,
+      options?.download ? `${invBase}?download=1` : invBase,
       currency
     );
   }
@@ -287,7 +386,12 @@ export async function downloadEscPos(type: PrintDocType, id: string, filename?: 
 }
 
 /** Web Share API when available (mobile-friendly) */
-export async function nativeShare(data: { title: string; text: string; url?: string; files?: File[] }) {
+export async function nativeShare(data: {
+  title: string;
+  text: string;
+  url?: string;
+  files?: File[];
+}) {
   if (Capacitor.isNativePlatform()) {
     try {
       await Share.share({
@@ -309,7 +413,7 @@ export function shareWhatsApp(text: string, phone?: string | null) {
   const digits = phone ? phone.replace(/[^\d]/g, '') : '';
   const base = digits ? `https://wa.me/${digits}` : 'https://wa.me/';
   const url = `${base}?text=${encodeURIComponent(text)}`;
-  window.open(url, '_blank', 'noopener,noreferrer');
+  window.open(url, '_blank');
 }
 
 export function shareSms(text: string, phone?: string | null) {
@@ -319,7 +423,10 @@ export function shareSms(text: string, phone?: string | null) {
 }
 
 export function shareMailto(subject: string, body: string, to?: string | null) {
-  const href = `mailto:${to || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  const q = new URLSearchParams();
+  if (subject) q.set('subject', subject);
+  if (body) q.set('body', body);
+  const href = `mailto:${to || ''}?${q.toString()}`;
   window.location.href = href;
 }
 
@@ -330,27 +437,37 @@ export async function copyText(text: string) {
   }
   const ta = document.createElement('textarea');
   ta.value = text;
+  ta.style.cssText = 'position:fixed;left:-9999px;top:0';
   document.body.appendChild(ta);
   ta.select();
   document.execCommand('copy');
-  document.body.removeChild(ta);
+  ta.remove();
 }
 
 export async function emailViaApi(type: PrintDocType, id: string, to?: string) {
-  const path = type === 'receipt' ? `/sales/${id}/share/email` : `/invoices/${id}/share/email`;
+  const path =
+    type === 'receipt' ? `/sales/${id}/share/email` : `/invoices/${id}/share/email`;
   const res = await fetch(`${apiBase()}${path}`, {
     method: 'POST',
-    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ to, currency: selectedPrintCurrency() }),
+    headers: {
+      ...authHeaders(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      to: to || undefined,
+      currency: selectedPrintCurrency(),
+    }),
   });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.message || 'Email failed');
-  return json.data as {
-    sent: boolean;
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((json as { message?: string })?.message || 'Email failed');
+  }
+  return ((json as { data?: unknown }).data || json) as {
+    sent?: boolean;
     to?: string;
-    reason?: string;
-    preview?: string;
     previewUrl?: string;
+    preview?: string;
+    reason?: string;
     mode?: string;
     messageId?: string;
   };
