@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { canPickDeviceContact, pickDeviceContact } from '@/native/pickContact';
+import { PhoneActions } from '@/components/shared/PhoneActions';
 import { PrintShareDialog } from '@/components/shared/PrintShareDialog';
 import { Link } from 'react-router-dom';
 
@@ -85,8 +86,8 @@ function DataTable({ columns, rows }: { columns: string[]; rows: React.ReactNode
             {rows.map((row, i) => (
               <tr key={i} className="border-b border-border/60 hover:bg-muted/30">
                 {row.map((cell, j) => (
-                  <td key={j} className="px-2 sm:px-3 py-1.5 sm:py-2.5 max-w-[9rem] sm:max-w-[14rem]">
-                    <div className="min-w-0 truncate">{cell}</div>
+                  <td key={j} className="px-2 sm:px-3 py-1.5 sm:py-2.5 max-w-[12rem] sm:max-w-[18rem]">
+                    <div className="min-w-0 overflow-hidden">{cell}</div>
                   </td>
                 ))}
               </tr>
@@ -727,21 +728,29 @@ export function CustomersPage() {
             email?: string;
             balance: number;
             loyaltyPoints: number;
-          }) => [
-            c.code,
-            c.businessName || `${c.firstName || ''} ${c.lastName || ''}`.trim(),
-            c.phone || '—',
-            c.email || '—',
-            formatCurrency(Number(c.balance)),
-            String(c.loyaltyPoints),
-          ]
+          }) => {
+            const name =
+              c.businessName || `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Customer';
+            return [
+              c.code,
+              name,
+              <PhoneActions
+                key={`phone-${c.code}`}
+                phone={c.phone}
+                messageBody={`Hi ${name}, `}
+              />,
+              c.email || '—',
+              formatCurrency(Number(c.balance)),
+              String(c.loyaltyPoints),
+            ];
+          }
         )}
       />
     </PageShell>
   );
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• SUPPLIERS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ════════════════════ SUPPLIERS ════════════════════
 export function SuppliersPage() {
   const [show, setShow] = useState(false);
   const [form, setForm] = useState({ name: '', phone: '', email: '', contactPerson: '' });
@@ -788,8 +797,8 @@ export function SuppliersPage() {
         rows={(data?.data || []).map((s: { code: string; name: string; email?: string; phone?: string; balance: number }) => [
           s.code,
           s.name,
-          s.email || 'â€”',
-          s.phone || 'â€”',
+          s.email || '—',
+          <PhoneActions key={`sup-phone-${s.code}`} phone={s.phone} messageBody={`Hi ${s.name}, `} />,
           formatCurrency(Number(s.balance)),
         ])}
       />
@@ -797,7 +806,7 @@ export function SuppliersPage() {
   );
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• PURCHASES â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ════════════════════ PURCHASES ════════════════════
 export function PurchasesPage() {
   const qc = useQueryClient();
   const [show, setShow] = useState(false);
@@ -1947,7 +1956,16 @@ export function InvoicesPage() {
                       </strong>
                     </p>
                     {detail.customer?.phone && (
-                      <p className="text-muted-foreground text-xs">{detail.customer.phone}</p>
+                      <div className="pt-0.5">
+                        <PhoneActions
+                          phone={detail.customer.phone}
+                          messageBody={`Hi ${
+                            detail.customer?.businessName ||
+                            `${detail.customer?.firstName || ''} ${detail.customer?.lastName || ''}`.trim() ||
+                            ''
+                          }, regarding invoice ${detail.invoiceNo || ''}`.trim()}
+                        />
+                      </div>
                     )}
                     {detail.customer?.email && (
                       <p className="text-muted-foreground text-xs">{detail.customer.email}</p>
@@ -2708,7 +2726,9 @@ function ReportTable({ kind, data }: { kind: ReportKind; data: unknown }) {
                 <tr key={(r.code || '') + i} className="border-b border-border/60 odd:bg-muted/20">
                   <td className="p-2.5 font-mono">{r.code || '—'}</td>
                   <td className="p-2.5 font-medium">{name}</td>
-                  <td className="p-2.5 text-muted-foreground">{r.phone || '—'}</td>
+                  <td className="p-2.5">
+                    <PhoneActions phone={r.phone} messageBody={`Hi ${name}, `} />
+                  </td>
                   <td className="p-2.5 text-right tabular-nums font-semibold">
                     {formatCurrency(Number(r.balance || 0))}
                   </td>
