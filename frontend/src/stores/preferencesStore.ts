@@ -39,6 +39,8 @@ function applyThemePreset(preset: ThemePreset) {
   const root = document.documentElement;
   root.classList.remove('theme-clean', 'theme-night', 'theme-contrast');
   root.classList.add(`theme-${preset}`);
+  // Night shift forces dark look; other presets leave light/dark to theme store
+  // (system = phone default, or explicit light/dark).
   if (preset === 'night') {
     root.classList.add('dark');
   }

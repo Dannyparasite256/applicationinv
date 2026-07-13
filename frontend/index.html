@@ -46,16 +46,36 @@
           if (isAndroid) root.setAttribute('data-platform', 'android');
           else if (isIOS) root.setAttribute('data-platform', 'ios');
 
-          // Respect a saved custom font later in main.tsx; default = device system
+          // Defaults: device system font + device light/dark theme
           var fontId = 'system';
+          var themeMode = 'system';
           try {
             var raw = localStorage.getItem('eims-theme');
             if (raw) {
               var parsed = JSON.parse(raw);
-              var saved = parsed && parsed.state && parsed.state.fontId;
-              if (saved && typeof saved === 'string' && saved !== 'system') fontId = saved;
+              var savedFont = parsed && parsed.state && parsed.state.fontId;
+              if (savedFont && typeof savedFont === 'string' && savedFont !== 'system') fontId = savedFont;
+              var savedTheme = parsed && parsed.state && parsed.state.theme;
+              if (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'system') {
+                themeMode = savedTheme;
+              }
             }
-          } catch (e) { /* keep system */ }
+          } catch (e) { /* keep system defaults */ }
+
+          // Color theme: system → prefers-color-scheme; else explicit light/dark
+          var prefersDark = false;
+          try {
+            prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          } catch (e2) { /* ignore */ }
+          var resolvedDark = themeMode === 'dark' || (themeMode === 'system' && prefersDark);
+          if (resolvedDark) root.classList.add('dark');
+          else root.classList.remove('dark');
+          root.setAttribute('data-theme', themeMode);
+          root.setAttribute('data-resolved-theme', resolvedDark ? 'dark' : 'light');
+          try {
+            var meta = document.querySelector('meta[name="theme-color"]');
+            if (meta) meta.setAttribute('content', resolvedDark ? '#0f172a' : '#f8fafc');
+          } catch (e3) { /* ignore */ }
 
           if (fontId === 'system') {
             root.classList.add('font-system');

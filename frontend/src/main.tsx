@@ -5,6 +5,8 @@ import App from './App';
 import './index.css';
 import { initNativeApp } from './native/initNative';
 import { applyAppFont, ensurePlatformDataset, normalizeFontId } from './lib/fonts';
+import { applyDocumentTheme, normalizeThemeMode } from './lib/theme';
+import { ensureSystemThemeWatch } from './stores/themeStore';
 
 // Ensure device id for session tracking
 if (!localStorage.getItem('deviceId')) {
@@ -25,21 +27,24 @@ try {
 }
 
 // Apply theme + font early (before paint).
-// Default is always the device system font unless the user chose another in Settings → Fonts.
-const theme = localStorage.getItem('eims-theme');
+// Defaults: device system font + device light/dark theme unless user overrode in Settings.
+const themeRaw = localStorage.getItem('eims-theme');
 let earlyFontId = 'system';
-if (theme) {
+let earlyThemeMode = 'system' as ReturnType<typeof normalizeThemeMode>;
+if (themeRaw) {
   try {
-    const parsed = JSON.parse(theme);
-    if (parsed.state?.theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    }
-    // Only accept a known id; unknown / missing → device system font
+    const parsed = JSON.parse(themeRaw);
+    earlyThemeMode = normalizeThemeMode(parsed.state?.theme as string | undefined);
     earlyFontId = normalizeFontId(parsed.state?.fontId as string | undefined);
   } catch {
+    earlyThemeMode = 'system';
     earlyFontId = 'system';
   }
 }
+// Device light/dark (or explicit light/dark lock)
+applyDocumentTheme(earlyThemeMode);
+ensureSystemThemeWatch();
+
 // Default path: device system font
 document.documentElement.classList.add(earlyFontId === 'system' ? 'font-system' : 'font-custom');
 document.documentElement.classList.remove(earlyFontId === 'system' ? 'font-custom' : 'font-system');

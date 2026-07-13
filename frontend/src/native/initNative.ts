@@ -48,8 +48,27 @@ export async function initNativeApp(): Promise<void> {
     } catch {
       /* some OEMs ignore this */
     }
-    await StatusBar.setStyle({ style: Style.Dark });
-    await StatusBar.setBackgroundColor({ color: '#0f172a' });
+    // Match phone / app resolved theme (system default = device light/dark)
+    let dark = false;
+    try {
+      const { resolveTheme, normalizeThemeMode } = await import('@/lib/theme');
+      const raw = localStorage.getItem('eims-theme');
+      let mode = 'system';
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        mode = normalizeThemeMode(parsed?.state?.theme);
+      }
+      dark = resolveTheme(mode) === 'dark';
+    } catch {
+      try {
+        dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      } catch {
+        dark = false;
+      }
+    }
+    // Light content (icons) on dark status bar area when app is dark
+    await StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light });
+    await StatusBar.setBackgroundColor({ color: dark ? '#0f172a' : '#f8fafc' });
   });
 
   await safe('splash', async () => {

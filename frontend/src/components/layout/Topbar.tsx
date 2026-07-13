@@ -27,7 +27,9 @@ export function Topbar({ onMenuClick }: TopbarProps) {
   const user = useAuthStore((s) => s.user);
   const refreshToken = useAuthStore((s) => s.refreshToken);
   const logout = useAuthStore((s) => s.logout);
-  const { theme, toggle } = useThemeStore();
+  const theme = useThemeStore((s) => s.theme);
+  const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
+  const toggle = useThemeStore((s) => s.toggle);
   const online = useNetworkStore((s) => s.online);
   const syncing = useNetworkStore((s) => s.syncing);
   const pendingCount = useNetworkStore((s) => s.pendingCount);
@@ -208,9 +210,14 @@ export function Topbar({ onMenuClick }: TopbarProps) {
             size="icon"
             className="topbar-action h-10 w-10 sm:h-9 sm:w-9 shrink-0"
             onClick={toggle}
-            aria-label="Toggle theme"
+            aria-label={resolvedTheme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+            title={
+              theme === 'system'
+                ? `Following phone (${resolvedTheme}) — tap to lock`
+                : `Theme: ${theme}`
+            }
           >
-            {theme === 'dark' ? (
+            {resolvedTheme === 'dark' ? (
               <Sun className="h-4 w-4" />
             ) : (
               <Moon className="h-4 w-4" />

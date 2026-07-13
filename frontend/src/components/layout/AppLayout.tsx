@@ -9,6 +9,8 @@ import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { useCurrencyStore } from '@/stores/currencyStore';
 import { applyAppFont, normalizeFontId } from '@/lib/fonts';
+import { applyDocumentTheme, normalizeThemeMode } from '@/lib/theme';
+import { ensureSystemThemeWatch } from '@/stores/themeStore';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { useCurrencyBootstrap } from '@/hooks/useCurrencyBootstrap';
 import { fetchMe } from '@/services/auth.service';
@@ -64,8 +66,12 @@ export function AppLayout() {
     };
   }, [accessToken, setUser]);
 
+  // Keep color theme in sync (system follows phone light/dark; light/dark are locks)
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark');
+    ensureSystemThemeWatch();
+    const mode = normalizeThemeMode(theme);
+    const painted = applyDocumentTheme(mode);
+    useThemeStore.setState({ resolvedTheme: painted });
   }, [theme]);
 
   // Keep font CSS vars in sync (persist rehydrate + user changes)

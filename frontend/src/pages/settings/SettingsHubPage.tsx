@@ -22,6 +22,8 @@ import { formatDate } from '@/lib/utils';
 import { APP_FONTS } from '@/lib/fonts';
 import { useThemeStore } from '@/stores/themeStore';
 import { usePreferencesStore, type ThemePreset } from '@/stores/preferencesStore';
+import type { ThemeMode } from '@/lib/theme';
+import { resolveTheme } from '@/lib/theme';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
@@ -182,21 +184,24 @@ export function SettingsHubPage() {
               ))}
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant={theme === 'light' ? 'default' : 'outline'}
-              onClick={() => setTheme('light')}
-            >
-              Light
-            </Button>
-            <Button
-              size="sm"
-              variant={theme === 'dark' ? 'default' : 'outline'}
-              onClick={() => setTheme('dark')}
-            >
-              Dark
-            </Button>
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                { id: 'system' as ThemeMode, label: 'Phone default' },
+                { id: 'light' as ThemeMode, label: 'Light' },
+                { id: 'dark' as ThemeMode, label: 'Dark' },
+              ]
+            ).map((opt) => (
+              <Button
+                key={opt.id}
+                size="sm"
+                variant={theme === opt.id ? 'default' : 'outline'}
+                onClick={() => setTheme(opt.id)}
+              >
+                {opt.label}
+                {opt.id === 'system' && theme === 'system' ? ` (${resolveTheme('system')})` : ''}
+              </Button>
+            ))}
           </div>
         </CardContent>
       </Card>
@@ -251,21 +256,27 @@ export function SettingsHubPage() {
         <CardContent className="space-y-4">
           <div>
             <p className="text-sm font-medium mb-2">Theme</p>
+            <p className="text-xs text-muted-foreground mb-2">
+              Default follows your phone light/dark setting
+            </p>
             <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant={theme === 'light' ? 'default' : 'outline'}
-                onClick={() => setTheme('light')}
-              >
-                Light
-              </Button>
-              <Button
-                size="sm"
-                variant={theme === 'dark' ? 'default' : 'outline'}
-                onClick={() => setTheme('dark')}
-              >
-                Dark
-              </Button>
+              {(
+                [
+                  { id: 'system' as ThemeMode, label: 'Phone default' },
+                  { id: 'light' as ThemeMode, label: 'Light' },
+                  { id: 'dark' as ThemeMode, label: 'Dark' },
+                ]
+              ).map((opt) => (
+                <Button
+                  key={opt.id}
+                  size="sm"
+                  variant={theme === opt.id ? 'default' : 'outline'}
+                  onClick={() => setTheme(opt.id)}
+                >
+                  {opt.label}
+                  {opt.id === 'system' && theme === 'system' ? ` (${resolveTheme('system')})` : ''}
+                </Button>
+              ))}
             </div>
           </div>
           <SettingsLink
