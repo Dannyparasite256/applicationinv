@@ -159,8 +159,15 @@ export async function ensurePlatformBootstrap(): Promise<void> {
       });
     }
 
-    const email = (process.env.SUPERADMIN_EMAIL || 'superadmin@ims.local').toLowerCase();
-    const plainPassword = process.env.SUPERADMIN_PASSWORD || 'Admin@123';
+    const email = (
+      process.env.SUPERADMIN_EMAIL ||
+      process.env.SEED_SUPERADMIN_EMAIL ||
+      'superadmin@ims.local'
+    ).toLowerCase();
+    const plainPassword =
+      process.env.SUPERADMIN_PASSWORD ||
+      process.env.SEED_PASSWORD ||
+      process.env.SEED_ADMIN_PASSWORD;
     const forceReset = process.env.SUPERADMIN_FORCE_RESET === 'true';
 
     const existingSuper = await prisma.user.findFirst({
@@ -172,6 +179,13 @@ export async function ensurePlatformBootstrap(): Promise<void> {
 
     if (existingSuper && !forceReset) {
       logger.info('Platform bootstrap: super admin already exists', { email: existingSuper.email });
+      return;
+    }
+
+    if (!plainPassword || plainPassword.length < 8) {
+      logger.warn(
+        'Platform bootstrap: skip super admin create/reset — set SUPERADMIN_PASSWORD or SEED_PASSWORD in env (min 8 chars)'
+      );
       return;
     }
 
@@ -230,7 +244,7 @@ export async function ensurePlatformBootstrap(): Promise<void> {
 
     logger.info('Platform bootstrap: super admin ready', {
       email,
-      hint: 'Default password Admin@123 unless SUPERADMIN_PASSWORD is set',
+      hint: 'Password from SUPERADMIN_PASSWORD / SEED_PASSWORD (never logged)',
     });
   } catch (err) {
     logger.error('Platform bootstrap failed (non-fatal)', {
