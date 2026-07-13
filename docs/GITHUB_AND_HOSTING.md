@@ -33,12 +33,8 @@ npm run dev
 - API: http://localhost:4000/api/v1  
 - Docs: http://localhost:4000/api/v1/docs  
 
-Demo logins (after seed):
-
-| Role | Email | Password |
-|------|-------|----------|
-| Company Owner | `admin@demo.local` | `Admin@123` |
-| Super Admin | `superadmin@ims.local` | `Admin@123` |
+Demo logins (after seed): use the emails/password you set in **`.env`** (`SEED_PASSWORD`, `SEED_ADMIN_EMAIL`, `SEED_SUPERADMIN_EMAIL`).  
+Keep them only in gitignored files (`.env`, `docs/CREDENTIALS.local.md`). See **[CREDENTIALS.example.md](./CREDENTIALS.example.md)**.
 
 ### Option 2 — Docker (full stack like production)
 
@@ -178,10 +174,8 @@ Why Render for *this* app?
 
     Demo logins after seed:
 
-    | Role | Email | Password |
-    |------|-------|----------|
-    | Company Owner | `admin@demo.local` | `Admin@123` |
-    | Super Admin | `superadmin@ims.local` | `Admin@123` |
+    Demo / super-admin credentials: set via `SEED_PASSWORD` in `.env` (never commit).  
+    See `docs/CREDENTIALS.example.md`.
 
 13. Open the **eims-web** URL in your browser. First load may be slow while the free API wakes up.
 

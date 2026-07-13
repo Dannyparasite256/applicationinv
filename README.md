@@ -90,10 +90,13 @@ npm run dev
 
 ### Demo credentials
 
-| User | Email | Password |
-|------|-------|----------|
-| Company Owner | `admin@demo.local` | `Admin@123` |
-| Super Admin | `superadmin@ims.local` | `Admin@123` |
+Demo / super-admin passwords are **not stored in this repo**.
+
+1. Copy `docs/CREDENTIALS.example.md` → `docs/CREDENTIALS.local.md` (gitignored)
+2. Set `SEED_PASSWORD` (and optional emails) in `.env`
+3. Run `npm run db:seed`
+
+See **[docs/CREDENTIALS.example.md](docs/CREDENTIALS.example.md)**.
 
 ## Docker (full stack)
 

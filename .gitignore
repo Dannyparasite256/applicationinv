@@ -1,59 +1,129 @@
+# ═══════════════════════════════════════════════════════════════
 # Dependencies
+# ═══════════════════════════════════════════════════════════════
 node_modules/
 .pnp
 .pnp.js
+**/node_modules/
 
-# Build
+# ═══════════════════════════════════════════════════════════════
+# Environment & secrets (NEVER commit real credentials)
+# ═══════════════════════════════════════════════════════════════
+.env
+.env.*
+!.env.example
+!.env.production.example
+!**/.env.example
+!**/.env.production.example
+
+# Frontend env (local + production URLs/keys)
+frontend/.env
+frontend/.env.local
+frontend/.env.development
+frontend/.env.development.local
+frontend/.env.production
+frontend/.env.production.local
+frontend/.env.android
+frontend/.env*.local
+
+# Backend / root secrets
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# Local credentials / private notes (superadmin, demo passwords, API keys)
+credentials.local.md
+credentials.local.txt
+CREDENTIALS.local.md
+docs/CREDENTIALS.local.md
+docs/CREDENTIALS.local.txt
+**/credentials.local.*
+**/*credentials*.local.*
+.secrets/
+secrets/
+*.pem
+*.p12
+*.pfx
+*.key
+!**/public*.pem
+*.keystore
+*.jks
+google-services.json
+GoogleService-Info.plist
+service-account*.json
+*-service-account.json
+
+# ═══════════════════════════════════════════════════════════════
+# Build outputs
+# ═══════════════════════════════════════════════════════════════
 dist/
 build/
 *.tsbuildinfo
+frontend/dist/
+frontend/dev-dist/
+backend/dist/
 
-# Environment (never commit secrets)
-.env
-.env.local
-.env.*.local
-frontend/.env.android
-!.env.example
-!.env.production.example
-
-# Logs
+# ═══════════════════════════════════════════════════════════════
+# Logs & runtime data
+# ═══════════════════════════════════════════════════════════════
 logs/
+**/logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+backend/logs/
+pnpm-debug.log*
 
-# IDE
+# ═══════════════════════════════════════════════════════════════
+# Uploads, backups, generated media (may contain tenant data)
+# ═══════════════════════════════════════════════════════════════
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/generated/
+backend/backups/
+backups/
+*.sql
+*.sql.gz
+*.dump
+tmp/
+*.pdf
+!docs/**/*.pdf
+
+# ═══════════════════════════════════════════════════════════════
+# IDE / OS
+# ═══════════════════════════════════════════════════════════════
 .idea/
 .vscode/
 *.swp
 *.swo
 .DS_Store
+Thumbs.db
+Desktop.ini
 
+# ═══════════════════════════════════════════════════════════════
 # Testing
+# ═══════════════════════════════════════════════════════════════
 coverage/
+.nyc_output/
 
-# Uploads & generated
-backend/uploads/*
-!backend/uploads/.gitkeep
-backend/generated/
-backend/backups/
-*.pdf
-tmp/
-
-# Prisma
+# ═══════════════════════════════════════════════════════════════
+# Prisma local DBs
+# ═══════════════════════════════════════════════════════════════
 backend/prisma/*.db
 backend/prisma/*.db-journal
+*.db
+*.db-journal
 
+# ═══════════════════════════════════════════════════════════════
 # Docker volumes
+# ═══════════════════════════════════════════════════════════════
 postgres_data/
 redis_data/
 
-# PWA
-frontend/dev-dist/
-frontend/dist/
-
-# Android local / generated (source under android/ is kept)
+# ═══════════════════════════════════════════════════════════════
+# Android local / generated
+# ═══════════════════════════════════════════════════════════════
 frontend/android/.gradle/
 frontend/android/app/build/
 frontend/android/build/
@@ -61,19 +131,28 @@ frontend/android/local.properties
 frontend/android/captures/
 frontend/android/app/src/main/assets/public/
 frontend/android/capacitor-cordova-android-plugins/build/
+frontend/android/.idea/
 *.apk
 *.aab
-*.keystore
+*.ap_
+Enterprise-IMS-debug.apk
+Enterprise-IMS*.apk
 
+# ═══════════════════════════════════════════════════════════════
 # Windows Electron desktop package output
+# ═══════════════════════════════════════════════════════════════
 desktop/release/
 desktop/node_modules/
+desktop/package-lock.json
 *.exe
 !desktop/**/*.cjs
 
-# OS
-Thumbs.db
-Desktop.ini
-
+# ═══════════════════════════════════════════════════════════════
 # Local tooling / agent noise
+# ═══════════════════════════════════════════════════════════════
 .grok/
+.cursor/
+.claude/
+.codex/
+*.local.json
+.session/

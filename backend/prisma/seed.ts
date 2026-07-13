@@ -228,14 +228,29 @@ async function main() {
     });
   }
 
-  const passwordHash = await bcrypt.hash('Admin@123', 12);
+  // Passwords come from env — never hardcode production/superadmin secrets in the repo
+  const seedPassword =
+    process.env.SEED_PASSWORD ||
+    process.env.DEMO_PASSWORD ||
+    process.env.SEED_ADMIN_PASSWORD;
+  if (!seedPassword || seedPassword.length < 8) {
+    throw new Error(
+      'Set SEED_PASSWORD (min 8 chars) in .env before seeding. See docs/CREDENTIALS.example.md'
+    );
+  }
+  const adminEmail = (process.env.SEED_ADMIN_EMAIL || 'admin@demo.local').toLowerCase();
+  const superAdminEmail = (
+    process.env.SEED_SUPERADMIN_EMAIL || 'superadmin@ims.local'
+  ).toLowerCase();
+
+  const passwordHash = await bcrypt.hash(seedPassword, 12);
 
   const admin = await prisma.user.upsert({
-    where: { companyId_email: { companyId: company.id, email: 'admin@demo.local' } },
+    where: { companyId_email: { companyId: company.id, email: adminEmail } },
     create: {
       companyId: company.id,
       branchId: branch.id,
-      email: 'admin@demo.local',
+      email: adminEmail,
       passwordHash,
       firstName: 'System',
       lastName: 'Admin',
@@ -320,13 +335,13 @@ async function main() {
   });
   console.log('  ✓ Demo cashier (active) + pending staff');
 
-  // Super admin (platform)
+  // Super admin (platform) — email/password from env only
   const superAdminRole = await prisma.role.findFirst({ where: { code: 'SUPER_ADMIN', companyId: null } });
   const superAdmin = await prisma.user.upsert({
-    where: { companyId_email: { companyId: company.id, email: 'superadmin@ims.local' } },
+    where: { companyId_email: { companyId: company.id, email: superAdminEmail } },
     create: {
       companyId: company.id,
-      email: 'superadmin@ims.local',
+      email: superAdminEmail,
       passwordHash,
       firstName: 'Super',
       lastName: 'Admin',
@@ -668,9 +683,11 @@ async function main() {
   console.log('');
   console.log('✅ Seed complete');
   console.log('─────────────────────────────────────');
-  console.log('  Demo login:  admin@demo.local / Admin@123');
-  console.log('  Super admin: superadmin@ims.local / Admin@123');
-  console.log('  Company:     Demo Enterprise (slug: demo)');
+  console.log(`  Demo login email:  ${adminEmail}`);
+  console.log(`  Super admin email: ${superAdminEmail}`);
+  console.log('  Password:          (from SEED_PASSWORD in .env — not printed)');
+  console.log('  Company:           Demo Enterprise (slug: demo)');
+  console.log('  Store passwords only in .env / docs/CREDENTIALS.local.md (gitignored)');
   console.log('─────────────────────────────────────');
 }
 

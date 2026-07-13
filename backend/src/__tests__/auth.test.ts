@@ -3,9 +3,10 @@ import { hashPassword, comparePassword, slugify, generateSku } from '../utils/cr
 
 describe('Crypto utilities', () => {
   it('hashes and compares passwords', async () => {
-    const hash = await hashPassword('Admin@123');
-    expect(hash).not.toBe('Admin@123');
-    expect(await comparePassword('Admin@123', hash)).toBe(true);
+    const sample = 'TestPass123!';
+    const hash = await hashPassword(sample);
+    expect(hash).not.toBe(sample);
+    expect(await comparePassword(sample, hash)).toBe(true);
     expect(await comparePassword('wrong', hash)).toBe(false);
   });
 
@@ -22,7 +23,7 @@ describe('Crypto utilities', () => {
 describe('Auth validation patterns', () => {
   it('password strength regex', () => {
     const re = /^(?=.*[A-Z])(?=.*[a-z])(?=.*[0-9]).{8,}$/;
-    expect(re.test('Admin@123')).toBe(true);
+    expect(re.test('TestPass123!')).toBe(true);
     expect(re.test('weak')).toBe(false);
     expect(re.test('nouppercase1')).toBe(false);
   });

@@ -6,7 +6,7 @@
 2. Enter email and password.
 3. If 2FA is enabled, enter the 6-digit authenticator code.
 
-Demo: `admin@demo.local` / `Admin@123`
+Demo accounts: use the email/password from your local seed (`.env` / `docs/CREDENTIALS.local.md` — not published in the repo).
 
 ## Dashboard
 
