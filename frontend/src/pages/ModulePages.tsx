@@ -2376,6 +2376,8 @@ export function LaboratoryPage() {
 
 export function AccountingPage() {
   const qc = useQueryClient();
+  const baseCurrency = useCurrencyStore((s) => s.baseCurrency);
+  const displayCurrency = useCurrencyStore((s) => s.displayCurrency);
   const [expForm, setExpForm] = useState({
     category: 'other',
     description: '',
@@ -2392,30 +2394,41 @@ export function AccountingPage() {
   });
   const { data: expenses } = useQuery({
     queryKey: ['expenses'],
-    queryFn: async () => (await api.get('/expenses')).data.data as {
-      total: number;
-      rows: Array<{
-        id: string;
-        category: string;
-        description?: string;
-        amount: number;
-        expenseDate: string;
-      }>;
-    },
+    queryFn: async () =>
+      (await api.get('/expenses')).data.data as {
+        total: number;
+        currency?: string;
+        baseCurrency?: string;
+        rows: Array<{
+          id: string;
+          category: string;
+          description?: string;
+          amount: number;
+          expenseDate: string;
+          currency?: string;
+        }>;
+      },
   });
+  // Expenses are always stored in company default (base) currency for P&L
+  const expenseCurrency = (expenses?.baseCurrency || expenses?.currency || baseCurrency || 'USD').toUpperCase();
+  const entryCurrency = (displayCurrency || expenseCurrency).toUpperCase();
+
   const addExpense = useMutation({
     mutationFn: async () => {
-      const amount = parseFloat(expForm.amount);
-      if (!Number.isFinite(amount) || amount <= 0) throw new Error('Enter a valid amount');
+      // Convert from the currency shown in the form → company base before save
+      const amountBase = parseMoneyToBase(expForm.amount);
+      if (!Number.isFinite(amountBase) || amountBase <= 0) throw new Error('Enter a valid amount');
       return api.post('/expenses', {
         category: expForm.category,
         description: expForm.description || null,
-        amount,
+        amount: amountBase,
+        // Explicit base: server also normalizes to company default currency
+        currency: expenseCurrency,
         expenseDate: expForm.expenseDate,
       });
     },
     onSuccess: () => {
-      toast.success('Expense recorded');
+      toast.success(`Expense recorded in ${expenseCurrency}`);
       setExpForm((f) => ({ ...f, description: '', amount: '' }));
       qc.invalidateQueries({ queryKey: ['expenses'] });
       qc.invalidateQueries({ queryKey: ['profit-report'] });
@@ -2435,7 +2448,10 @@ export function AccountingPage() {
   });
 
   return (
-    <PageShell title="Accounting" description="P&L, expenses, and chart of accounts">
+    <PageShell
+      title="Accounting"
+      description={`P&L & expenses in company default currency (${expenseCurrency})`}
+    >
       {profit && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
           {[
@@ -2451,7 +2467,9 @@ export function AccountingPage() {
               <CardContent className="pt-5">
                 <p className="text-sm text-muted-foreground">{k.label}</p>
                 <p className="text-xl font-bold tabular-nums">
-                  {k.isPct ? `${Number(k.value || 0).toFixed(1)}%` : formatCurrency(Number(k.value || 0))}
+                  {k.isPct
+                    ? `${Number(k.value || 0).toFixed(1)}%`
+                    : formatCurrency(Number(k.value || 0))}
                 </p>
               </CardContent>
             </Card>
@@ -2462,7 +2480,14 @@ export function AccountingPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Record expense</CardTitle>
-          <CardDescription>Rent, salaries, utilities — deducted from gross profit for net profit</CardDescription>
+          <CardDescription>
+            Rent, salaries, utilities — stored and deducted in company default currency{' '}
+            <strong>{expenseCurrency}</strong>
+            {entryCurrency !== expenseCurrency
+              ? ` (you enter in ${entryCurrency}; we convert to ${expenseCurrency})`
+              : ''}
+            . Net profit = gross profit − expenses.
+          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-5">
           <select
@@ -2483,12 +2508,19 @@ export function AccountingPage() {
             value={expForm.description}
             onChange={(e) => setExpForm({ ...expForm, description: e.target.value })}
           />
-          <Input
-            type="number"
-            placeholder="Amount"
-            value={expForm.amount}
-            onChange={(e) => setExpForm({ ...expForm, amount: e.target.value })}
-          />
+          <div className="relative min-w-0">
+            <Input
+              type="number"
+              inputMode="decimal"
+              placeholder={`Amount (${entryCurrency})`}
+              value={expForm.amount}
+              onChange={(e) => setExpForm({ ...expForm, amount: e.target.value })}
+              className="pr-14"
+            />
+            <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-muted-foreground">
+              {entryCurrency}
+            </span>
+          </div>
           <Input
             type="date"
             value={expForm.expenseDate}
@@ -2501,11 +2533,12 @@ export function AccountingPage() {
       </Card>
 
       <DataTable
-        columns={['Date', 'Category', 'Description', 'Amount', '']}
+        columns={['Date', 'Category', 'Description', `Amount (${expenseCurrency})`, '']}
         rows={(expenses?.rows || []).map((r) => [
           formatDate(r.expenseDate),
           r.category,
           r.description || '—',
+          // Stored in base — formatCurrency converts to display currency for the UI
           formatCurrency(Number(r.amount)),
           <Button
             key="d"

@@ -31,9 +31,12 @@ export type ProfitBreakdown = {
   grossProfit: number;
   /** Gross margin % on net revenue */
   grossMargin: number;
-  /** Operating expenses in period */
+  /**
+   * Operating expenses in period (company default / base currency —
+   * same unit as revenue & COGS).
+   */
   expenses: number;
-  /** Net profit = grossProfit − expenses */
+  /** Net profit = grossProfit − expenses (all in base currency) */
   netProfit: number;
   /** Net margin % on net revenue */
   netMargin: number;

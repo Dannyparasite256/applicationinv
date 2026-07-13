@@ -528,12 +528,14 @@ export async function expensesCsv(
 ) {
   const { listExpenses } = await import('./expense.service');
   const report = await listExpenses(companyId, { from, to, limit: 5000 });
+  const cur = report.baseCurrency || report.currency || 'USD';
   return toCsv(
     report.rows.map((r) => ({
       date: new Date(r.expenseDate).toISOString().slice(0, 10),
       category: r.category,
       description: r.description || '',
       amount: Number(r.amount),
+      currency: cur,
       paymentMethod: r.paymentMethod || '',
       reference: r.reference || '',
     }))
