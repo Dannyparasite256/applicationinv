@@ -28,7 +28,10 @@ import {
   ImagePlus,
   Type,
   ChevronRight,
+  Contact,
 } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
+import { canPickDeviceContact, pickDeviceContact } from '@/native/pickContact';
 import { PrintShareDialog } from '@/components/shared/PrintShareDialog';
 import { Link } from 'react-router-dom';
 
@@ -577,11 +580,14 @@ export function SalesPage() {
   );
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• CUSTOMERS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ════════════════════ CUSTOMERS ════════════════════
 export function CustomersPage() {
   const [form, setForm] = useState({ firstName: '', lastName: '', phone: '', email: '' });
   const [show, setShow] = useState(false);
+  const [pickingContact, setPickingContact] = useState(false);
   const qc = useQueryClient();
+  const showContactPicker = canPickDeviceContact() || Capacitor.isNativePlatform();
+
   const { data } = useQuery({
     queryKey: ['customers'],
     queryFn: async () => (await api.get('/customers', { params: { limit: 50 } })).data,
@@ -608,6 +614,29 @@ export function CustomersPage() {
     onError: (e) => toast.error(getErrorMessage(e)),
   });
 
+  const fillFromContacts = async () => {
+    setPickingContact(true);
+    try {
+      const picked = await pickDeviceContact();
+      if (!picked) return;
+      setForm((prev) => ({
+        firstName: picked.firstName || prev.firstName,
+        lastName: picked.lastName || prev.lastName,
+        phone: picked.phone || prev.phone,
+        email: picked.email || prev.email,
+      }));
+      toast.success(
+        picked.displayName
+          ? `Filled from contact: ${picked.displayName}`
+          : 'Contact details filled in'
+      );
+    } catch (e) {
+      toast.error(getErrorMessage(e));
+    } finally {
+      setPickingContact(false);
+    }
+  };
+
   return (
     <PageShell
       title="Customers"
@@ -620,14 +649,69 @@ export function CustomersPage() {
     >
       {show && (
         <Card>
-          <CardContent className="pt-5 grid gap-3 sm:grid-cols-5">
-            <Input placeholder="First name" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
-            <Input placeholder="Last name" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
-            <Input placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-            <Input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-            <Button onClick={() => create.mutate()} loading={create.isPending}>
-              Save
-            </Button>
+          <CardContent className="pt-5 space-y-3">
+            {showContactPicker && (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  loading={pickingContact}
+                  onClick={() => void fillFromContacts()}
+                >
+                  <Contact className="h-4 w-4" />
+                  Pick from contacts
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Auto-fill name, phone &amp; email from your phonebook
+                </p>
+              </div>
+            )}
+            <div className="grid gap-3 sm:grid-cols-5">
+              <Input
+                placeholder="First name"
+                value={form.firstName}
+                onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+              />
+              <Input
+                placeholder="Last name"
+                value={form.lastName}
+                onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+              />
+              <div className="flex gap-1.5 sm:col-span-1">
+                <Input
+                  className="flex-1 min-w-0"
+                  placeholder="Phone"
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  inputMode="tel"
+                  autoComplete="tel"
+                />
+                {showContactPicker && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="shrink-0"
+                    title="Pick phone from contacts"
+                    loading={pickingContact}
+                    onClick={() => void fillFromContacts()}
+                  >
+                    <Contact className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              <Input
+                placeholder="Email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                inputMode="email"
+                autoComplete="email"
+              />
+              <Button onClick={() => create.mutate()} loading={create.isPending}>
+                Save
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -646,8 +730,8 @@ export function CustomersPage() {
           }) => [
             c.code,
             c.businessName || `${c.firstName || ''} ${c.lastName || ''}`.trim(),
-            c.phone || 'â€”',
-            c.email || 'â€”',
+            c.phone || '—',
+            c.email || '—',
             formatCurrency(Number(c.balance)),
             String(c.loyaltyPoints),
           ]
