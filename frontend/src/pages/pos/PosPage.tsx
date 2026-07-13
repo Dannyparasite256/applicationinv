@@ -209,7 +209,20 @@ export function PosPage() {
     },
   });
 
-  const selectedCustomer = (customers || []).find((c) => c.id === customerId);
+  type PosCustomer = {
+    id: string;
+    code?: string;
+    firstName?: string;
+    lastName?: string;
+    businessName?: string;
+    phone?: string | null;
+    balance?: number | string | null;
+    creditLimit?: number | string | null;
+    loyaltyPoints?: number | null;
+  };
+  const selectedCustomer = (customers || []).find((c) => c.id === customerId) as
+    | PosCustomer
+    | undefined;
 
   const staffUserId = useAuthStore((s) => s.user?.id);
   const authUser = useAuthStore((s) => s.user);
@@ -916,12 +929,12 @@ export function PosPage() {
               <motion.div
                 key={p.id}
                 variants={staggerItem}
-                className="relative rounded-lg sm:rounded-xl border border-border bg-card shadow-sm min-w-0"
+                className="relative rounded-xl sm:rounded-2xl border border-border/60 bg-card shadow-soft min-w-0 transition-all duration-200 hover:shadow-elevated hover:border-primary/30 active:scale-[0.98]"
               >
                 <button
                   type="button"
                   onClick={() => addProduct(p)}
-                  className="w-full p-2 sm:p-3 text-left hover:border-primary"
+                  className="w-full p-2.5 sm:p-3 text-left"
                 >
                   <div className="flex gap-2 items-start pr-5">
                     {p.imageUrl ? (
@@ -1068,11 +1081,12 @@ export function PosPage() {
                 >
                   <option value="">Walk-in customer</option>
                   {(customers || []).map((c) => {
-                    const bal = Number(c.balance || 0);
-                    const pts = Number(c.loyaltyPoints || 0);
+                    const row = c as PosCustomer;
+                    const bal = Number(row.balance || 0);
+                    const pts = Number(row.loyaltyPoints || 0);
                     return (
-                      <option key={c.id} value={c.id}>
-                        {c.businessName || `${c.firstName || ''} ${c.lastName || ''}`.trim()} ({c.code})
+                      <option key={row.id} value={row.id}>
+                        {row.businessName || `${row.firstName || ''} ${row.lastName || ''}`.trim()} ({row.code})
                         {bal > 0 ? ` · owe ${bal}` : ''}
                         {pts > 0 ? ` · ${pts} pts` : ''}
                       </option>
@@ -1215,22 +1229,22 @@ export function PosPage() {
           </div>
         </div>
 
-        {/* Sticky checkout footer — always visible without opening discount */}
-        <div className="shrink-0 border-t border-border p-2 sm:p-3 space-y-1.5 bg-card shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.15)] pb-[max(0.5rem,env(safe-area-inset-bottom))] min-w-0">
+        {/* Sticky checkout footer — hero Charge bar */}
+        <div className="shrink-0 border-t border-border/80 p-2.5 sm:p-3 space-y-2 bg-card/95 backdrop-blur-md shadow-[0_-12px_32px_-12px_rgba(15,23,42,0.2)] pb-[max(0.65rem,calc(env(safe-area-inset-bottom)+3.5rem))] lg:pb-[max(0.65rem,env(safe-area-inset-bottom))] min-w-0">
           <div className="space-y-0.5 text-sm min-w-0">
             <div className="flex justify-between text-muted-foreground text-[11px] gap-2">
               <span className="shrink-0">Subtotal + tax</span>
-              <span className="tabular-nums truncate">
+              <span className="money-value truncate">
                 {formatCurrency(totals.subtotal + totals.tax)}
               </span>
             </div>
             {applyDiscount && discountAmount > 0 && (
               <div className="flex justify-between text-[11px] text-muted-foreground gap-2">
                 <span>Discount</span>
-                <span className="tabular-nums text-destructive">−{formatCurrency(discountAmount)}</span>
+                <span className="money-value text-destructive">−{formatCurrency(discountAmount)}</span>
               </div>
             )}
-            <div className="flex justify-between text-sm sm:text-base font-bold gap-2 min-w-0">
+            <div className="flex justify-between text-base sm:text-lg font-bold gap-2 min-w-0">
               <span className="shrink-0">Total</span>
               <span className="tabular-nums text-primary truncate">
                 {formatCurrency(totals.total, { currency: payCurrency })}
@@ -1239,7 +1253,7 @@ export function PosPage() {
           </div>
 
           <Button
-            className="w-full h-11 sm:h-12 text-sm sm:text-base font-semibold shadow-lg shadow-primary/25"
+            className="w-full h-12 sm:h-14 text-base sm:text-lg font-bold rounded-2xl bg-brand-gradient shadow-glow border-0 hover:opacity-95 active:scale-[0.99]"
             size="lg"
             loading={checkout.isPending}
             onClick={handleCheckout}
@@ -1252,8 +1266,8 @@ export function PosPage() {
                 : ''}
             </span>
           </Button>
-          <p className="text-[9px] sm:text-[10px] text-center text-muted-foreground leading-tight">
-            Discount optional · F9 to charge
+          <p className="text-[10px] text-center text-muted-foreground leading-tight">
+            {cart.length ? `${cart.length} item(s) · F9 to charge` : 'Add products to charge'}
           </p>
         </div>
       </div>

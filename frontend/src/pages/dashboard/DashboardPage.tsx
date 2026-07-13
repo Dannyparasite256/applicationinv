@@ -16,11 +16,8 @@ import {
 import {
   DollarSign,
   ShoppingBag,
-  Package,
   AlertTriangle,
   TrendingUp,
-  Users,
-  Truck,
   Wallet,
   Shield,
   Building2,
@@ -200,95 +197,91 @@ export function DashboardPage() {
               ? `${from} → ${to}`
               : 'Selected period';
 
-  // Period profit follows the date-range buttons (Today / 7d / 30d / Month / Custom)
+  // Period metrics follow the date-range filter
   const periodProfit = kpis?.periodProfit ?? kpis?.profit ?? 0;
-  const periodMargin = kpis?.periodMargin ?? kpis?.grossMargin;
   const periodNetProfit = kpis?.periodNetProfit ?? kpis?.netProfit ?? periodProfit;
   const periodExpenses = kpis?.periodExpenses ?? kpis?.expenses ?? 0;
   const periodSales = kpis?.periodSales ?? kpis?.salesMonth ?? 0;
   const periodSalesCount = kpis?.periodSalesCount ?? kpis?.salesMonthCount ?? 0;
+  const periodMargin = kpis?.periodNetMargin ?? kpis?.netMargin ?? kpis?.periodMargin ?? kpis?.grossMargin;
 
-  const cards = [
+  // Calm owner dashboard — 4 primary KPIs only
+  const heroCards = [
     {
-      label: 'Sales Today',
+      label: 'Sales today',
       value: formatCurrency(kpis?.salesToday || 0),
       sub: `${kpis?.salesTodayCount || 0} orders`,
       icon: DollarSign,
       color: 'text-primary',
+      ring: 'from-primary/15 to-primary/5',
       to: '/app/sales',
     },
     {
-      label: 'Weekly Sales',
-      value: formatCurrency(kpis?.salesWeek || 0),
-      sub: 'This week (Mon–Sun)',
+      label: `Sales · ${rangeLabel}`,
+      value: formatCurrency(periodSales),
+      sub: `${periodSalesCount} sales`,
       icon: TrendingUp,
       color: 'text-accent',
+      ring: 'from-cyan-500/15 to-cyan-500/5',
+      to: '/app/sales',
     },
     {
-      label: 'Period Sales',
-      value: formatCurrency(periodSales),
-      sub: `${periodSalesCount} sales · ${rangeLabel}`,
-      icon: Wallet,
-      color: 'text-success',
-    },
-    {
-      label: 'Gross Profit',
-      value: formatCurrency(periodProfit),
+      label: 'Net profit',
+      value: formatCurrency(periodNetProfit),
       sub:
         periodMargin != null
-          ? `${Number(periodMargin).toFixed(1)}% · ${rangeLabel}`
-          : `Net sales − COGS · ${rangeLabel}`,
-      icon: ShoppingBag,
-      color: 'text-success',
-    },
-    {
-      label: 'Net Profit',
-      value: formatCurrency(periodNetProfit),
-      sub: `After expenses ${formatCurrency(periodExpenses)} · ${rangeLabel}`,
+          ? `${Number(periodMargin).toFixed(1)}% after expenses`
+          : `Expenses ${formatCurrency(periodExpenses)}`,
       icon: Wallet,
       color: 'text-success',
+      ring: 'from-emerald-500/15 to-emerald-500/5',
       to: '/app/accounting',
     },
     {
-      label: 'Inventory Value',
-      value: formatCurrency(kpis?.inventoryValue || 0),
-      sub: `${kpis?.products || 0} products`,
-      icon: Package,
-      color: 'text-warning',
-      to: '/app/products',
-    },
-    {
-      label: 'Low Stock',
+      label: 'Low stock',
       value: formatNumber(kpis?.lowStock || 0),
-      sub: 'Items below reorder',
+      sub: 'Items need reorder',
       icon: AlertTriangle,
-      color: 'text-destructive',
+      color: 'text-warning',
+      ring: 'from-amber-500/15 to-amber-500/5',
       to: '/app/inventory#low-stock',
     },
-    {
-      label: 'Customers',
-      value: formatNumber(kpis?.customers || 0),
-      sub: 'Active',
-      icon: Users,
-      color: 'text-accent',
-      to: '/app/customers',
-    },
   ];
+
+  // Needs attention list
+  const attention: Array<{ label: string; detail: string; to: string; tone: string }> = [];
+  if ((kpis?.lowStock || 0) > 0) {
+    attention.push({
+      label: `${kpis?.lowStock} products low on stock`,
+      detail: 'Create a purchase draft from Inventory',
+      to: '/app/inventory#low-stock',
+      tone: 'text-warning',
+    });
+  }
+  if ((kpis?.pendingOrders || 0) > 0) {
+    attention.push({
+      label: `${kpis?.pendingOrders} purchases pending`,
+      detail: 'Receive or follow up with suppliers',
+      to: '/app/purchases',
+      tone: 'text-primary',
+    });
+  }
+  if (pendingCount > 0) {
+    attention.push({
+      label: `${pendingCount} offline sales waiting`,
+      detail: 'Sync when connection is stable',
+      to: '/app/sync',
+      tone: 'text-accent',
+    });
+  }
 
   const topName = data?.topProducts?.[0]?.name;
   const story =
     (kpis?.salesTodayCount || 0) > 0
-      ? `Today: ${kpis?.salesTodayCount} sale(s) for ${formatCurrency(kpis?.salesToday || 0)}${topName ? ` · Top item: ${topName}` : ''}.`
+      ? `Today you made ${kpis?.salesTodayCount} sale(s) for ${formatCurrency(kpis?.salesToday || 0)}${topName ? ` · Top item: ${topName}` : ''}.`
       : topName
-        ? `This period’s standout product is ${topName}. Open POS when you’re ready for the next sale.`
-        : 'No sales yet today — open POS to ring up your first order.';
-
-  const snapshotParts = [
-    `${kpis?.salesTodayCount || 0} sales today`,
-    formatCurrency(kpis?.salesToday || 0),
-    kpis?.lowStock ? `${kpis.lowStock} low stock` : null,
-    pendingCount ? `${pendingCount} offline pending` : null,
-  ].filter(Boolean);
+        ? `Standout product this period: ${topName}. Open POS when ready.`
+        : 'No sales yet today — open POS for your first order.';
 
   return (
     <div className="page-container">
@@ -302,75 +295,75 @@ export function DashboardPage() {
               month: 'short',
               day: 'numeric',
             })}
-            {snapshotParts.length ? ` · ${snapshotParts.join(' · ')}` : ''}
           </p>
         </div>
-        <Badge variant="secondary" className="h-7 rounded-full px-2.5 text-[11px] font-medium shrink-0">
-          {isFetching ? 'Refreshing…' : navigator.onLine ? 'Live' : 'Offline'}
-        </Badge>
+        <div className="flex items-center gap-2 shrink-0">
+          <Link
+            to="/app/pos"
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-brand-gradient px-3.5 text-xs font-semibold text-primary-foreground shadow-glow"
+          >
+            <ShoppingBag className="h-3.5 w-3.5" /> Open POS
+          </Link>
+          <Badge variant="secondary" className="h-7 rounded-full px-2.5 text-[11px] font-medium">
+            {isFetching ? 'Refreshing…' : navigator.onLine ? 'Live' : 'Offline'}
+          </Badge>
+        </div>
       </div>
 
       <OnboardingChecklist />
 
-      <Card>
-        <CardContent className="p-3 flex flex-wrap gap-2 items-end">
+      {/* Segmented period filter */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="segmented">
           {(
             [
               ['today', 'Today'],
-              ['7d', '7 days'],
-              ['30d', '30 days'],
+              ['7d', '7d'],
+              ['30d', '30d'],
               ['mtd', 'Month'],
               ['custom', 'Custom'],
             ] as const
           ).map(([id, label]) => (
-            <Button
+            <button
               key={id}
-              size="sm"
-              variant={range === id ? 'default' : 'outline'}
+              type="button"
+              className={`segmented-item ${range === id ? 'segmented-item-active' : 'segmented-item-idle'}`}
               onClick={() => setRange(id)}
             >
               {label}
-            </Button>
+            </button>
           ))}
-          {range === 'custom' && (
-            <>
-              <Input
-                type="date"
-                className="h-9 w-auto"
-                value={from}
-                onChange={(e) => setFrom(e.target.value)}
-              />
-              <Input
-                type="date"
-                className="h-9 w-auto"
-                value={to}
-                onChange={(e) => setTo(e.target.value)}
-              />
-            </>
-          )}
-          {(branches?.length || 0) > 0 && (
-            <select
-              className="h-9 rounded-lg border border-input bg-background px-2 text-sm"
-              value={branchId}
-              onChange={(e) => setBranchId(e.target.value)}
-            >
-              <option value="">All branches</option>
-              {branches!.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-          )}
-        </CardContent>
-      </Card>
+        </div>
+        {range === 'custom' && (
+          <div className="flex gap-1.5">
+            <Input type="date" className="h-8 w-auto text-xs" value={from} onChange={(e) => setFrom(e.target.value)} />
+            <Input type="date" className="h-8 w-auto text-xs" value={to} onChange={(e) => setTo(e.target.value)} />
+          </div>
+        )}
+        {(branches?.length || 0) > 0 && (
+          <select
+            className="h-8 rounded-lg border border-input bg-background px-2 text-xs"
+            value={branchId}
+            onChange={(e) => setBranchId(e.target.value)}
+          >
+            <option value="">All branches</option>
+            {branches!.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
 
-      <Card className="border-primary/15 bg-gradient-to-r from-primary/5 via-card to-accent/5">
-        <CardContent className="pt-3 pb-3 flex items-start gap-2.5">
-          <Sparkles className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+      <Card className="border-border/50 bg-gradient-to-br from-primary/[0.06] via-card to-accent/[0.04] shadow-soft">
+        <CardContent className="pt-3.5 pb-3.5 flex items-start gap-3">
+          <div className="rounded-xl bg-primary/10 p-2 text-primary shrink-0">
+            <Sparkles className="h-4 w-4" />
+          </div>
           <div className="min-w-0">
-            <p className="text-xs font-semibold text-primary">Business pulse</p>
-            <p className="text-sm text-muted-foreground mt-0.5">{story}</p>
+            <p className="text-xs font-semibold text-foreground">Today at a glance</p>
+            <p className="text-sm text-muted-foreground mt-0.5 leading-relaxed">{story}</p>
           </div>
         </CardContent>
       </Card>
@@ -413,71 +406,86 @@ export function DashboardPage() {
       )}
 
       {isLoading ? (
-        <SkeletonKpiGrid count={8} />
+        <SkeletonKpiGrid count={4} />
       ) : (
-        <div className="grid gap-2 sm:gap-2.5 grid-cols-2 xl:grid-cols-4 min-w-0">
-          {cards.map((card, i) => {
-            const inner = (
-              <div className="flex items-start justify-between relative z-[1] gap-1.5">
+        <div className="grid gap-2.5 sm:gap-3 grid-cols-2 min-w-0">
+          {heroCards.map((card, i) => (
+            <motion.div
+              key={card.label}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.04, type: 'spring', stiffness: 320, damping: 28 }}
+              className="kpi-card"
+            >
+              <Link to={card.to} className="block min-w-0 relative z-[1]">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-medium text-muted-foreground truncate">{card.label}</p>
+                    <p className="mt-1 text-lg sm:text-2xl font-bold money-value font-display truncate text-foreground">
+                      {card.value}
+                    </p>
+                    <p className="mt-1 text-[11px] text-muted-foreground truncate">{card.sub}</p>
+                  </div>
+                  <div
+                    className={`rounded-xl bg-gradient-to-br ${card.ring} p-2.5 shrink-0 ${card.color}`}
+                  >
+                    <card.icon className="h-4 w-4 sm:h-[18px] sm:w-[18px]" />
+                  </div>
+                </div>
+              </Link>
+            </motion.div>
+          ))}
+        </div>
+      )}
+
+      {/* Needs attention */}
+      {attention.length > 0 && (
+        <div className="space-y-2">
+          <p className="section-label">Needs attention</p>
+          <div className="space-y-1.5">
+            {attention.map((a) => (
+              <Link key={a.to + a.label} to={a.to} className="attention-item">
+                <AlertTriangle className={`h-4 w-4 shrink-0 ${a.tone}`} />
                 <div className="min-w-0 flex-1">
-                  <p className="text-[10px] sm:text-xs font-medium text-muted-foreground truncate">
-                    {card.label}
-                  </p>
-                  <p className="mt-0.5 text-sm sm:text-lg font-bold tabular-nums tracking-tight font-display truncate">
-                    {card.value}
-                  </p>
-                  <p className="mt-0.5 text-[10px] sm:text-xs text-muted-foreground truncate">{card.sub}</p>
+                  <p className="text-sm font-semibold truncate">{a.label}</p>
+                  <p className="text-[11px] text-muted-foreground truncate">{a.detail}</p>
                 </div>
-                <div
-                  className={`rounded-lg sm:rounded-xl bg-gradient-to-br from-muted to-muted/40 p-1.5 sm:p-2 ring-1 ring-border/60 shrink-0 ${card.color}`}
-                >
-                  <card.icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                </div>
-              </div>
-            );
-            return (
-              <motion.div
-                key={card.label}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.03, type: 'spring', stiffness: 320, damping: 28 }}
-                className="kpi-card"
-              >
-                {'to' in card && card.to ? (
-                  <Link to={card.to as string} className="block min-w-0">
-                    {inner}
-                  </Link>
-                ) : (
-                  inner
-                )}
-              </motion.div>
-            );
-          })}
+              </Link>
+            ))}
+          </div>
         </div>
       )}
 
       {!isSuperAdmin && (
-        <Card>
+        <Card className="border-border/60">
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
-              <Activity className="h-4 w-4 text-primary" /> What changed
+              <Activity className="h-4 w-4 text-primary" /> Recent activity
             </CardTitle>
-            <CardDescription>Recent activity in your business</CardDescription>
+            <CardDescription>Latest actions in your business</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2">
-            {(activity || []).slice(0, 6).map((log) => (
-              <div key={log.id} className="text-xs border-b border-border/50 pb-2 last:border-0">
-                <p className="font-medium">
-                  {log.action}{' '}
-                  <span className="text-muted-foreground font-normal">· {log.module}</span>
-                </p>
-                <p className="text-muted-foreground">
-                  {log.user
-                    ? `${log.user.firstName || ''} ${log.user.lastName || ''}`.trim() ||
-                      log.user.email
-                    : 'System'}{' '}
-                  · {new Date(log.createdAt).toLocaleString()}
-                </p>
+          <CardContent className="space-y-0">
+            {(activity || []).slice(0, 5).map((log) => (
+              <div
+                key={log.id}
+                className="flex gap-3 py-2.5 border-b border-border/40 last:border-0"
+              >
+                <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center shrink-0">
+                  <Activity className="h-3.5 w-3.5 text-muted-foreground" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">
+                    {log.action}{' '}
+                    <span className="text-muted-foreground font-normal">· {log.module}</span>
+                  </p>
+                  <p className="text-[11px] text-muted-foreground truncate">
+                    {log.user
+                      ? `${log.user.firstName || ''} ${log.user.lastName || ''}`.trim() ||
+                        log.user.email
+                      : 'System'}{' '}
+                    · {new Date(log.createdAt).toLocaleString()}
+                  </p>
+                </div>
               </div>
             ))}
             {!activity?.length && (

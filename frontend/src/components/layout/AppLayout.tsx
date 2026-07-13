@@ -3,6 +3,7 @@ import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
+import { MobileBottomNav } from './MobileBottomNav';
 import { OfflineBanner } from '@/components/shared/OfflineBanner';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -108,23 +109,24 @@ export function AppLayout() {
         <main
           className={
             isPos
-              ? 'flex-1 min-h-0 min-w-0 overflow-hidden'
-              : 'flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain'
+              ? 'flex-1 min-h-0 min-w-0 overflow-hidden has-mobile-bottom-nav'
+              : 'flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain has-mobile-bottom-nav'
           }
         >
           <AnimatePresence mode="wait">
             <motion.div
               key={pageKey}
-              initial={{ opacity: 0, y: 6 }}
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
               className={isPos ? 'h-full min-h-0 min-w-0' : 'min-h-full min-w-0 w-full max-w-full'}
             >
               <Outlet />
             </motion.div>
           </AnimatePresence>
         </main>
+        <MobileBottomNav />
       </div>
     </div>
   );

@@ -21,25 +21,39 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
-import { filterNavForUser } from '@/lib/roleAccess';
+import { filterNavForUser, type NavItem } from '@/lib/roleAccess';
 import { BrandMark } from '@/components/shared/BrandMark';
 import { tLabel } from '@/lib/i18nSimple';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 
-const nav = [
+type NavDef = NavItem & {
+  icon: typeof LayoutDashboard;
+  superAdminOnly?: boolean;
+  end?: boolean;
+};
+
+const nav: NavDef[] = [
   {
     to: '/app',
     label: 'Dashboard',
     icon: LayoutDashboard,
     end: true,
-    permissions: [], // all authenticated
-    roles: ['SUPER_ADMIN', 'COMPANY_OWNER', 'ADMINISTRATOR', 'BRANCH_MANAGER', 'STORE_MANAGER', 'ACCOUNTANT', 'AUDITOR'],
+    permissions: [],
+    roles: [
+      'SUPER_ADMIN',
+      'COMPANY_OWNER',
+      'ADMINISTRATOR',
+      'BRANCH_MANAGER',
+      'STORE_MANAGER',
+      'ACCOUNTANT',
+      'AUDITOR',
+    ],
   },
   { to: '/app/platform', label: 'All Businesses', icon: Shield, superAdminOnly: true },
   {
     to: '/app/staff',
-    label: 'Staff & Approvals',
+    label: 'Staff',
     icon: UserCheck,
     permissions: ['users.manage'],
     roles: ['COMPANY_OWNER', 'ADMINISTRATOR', 'BRANCH_MANAGER'],
@@ -55,7 +69,12 @@ const nav = [
   { to: '/app/sales', label: 'Sales', icon: ShoppingCart, permissions: ['sales.read'] },
   { to: '/app/purchases', label: 'Purchases', icon: Truck, permissions: ['purchases.read'] },
   { to: '/app/customers', label: 'Customers', icon: Users, permissions: ['crm.customers.read'] },
-  { to: '/app/suppliers', label: 'Suppliers', icon: Truck, permissions: ['purchases.read', 'purchases.create'] },
+  {
+    to: '/app/suppliers',
+    label: 'Suppliers',
+    icon: Truck,
+    permissions: ['purchases.read', 'purchases.create'],
+  },
   {
     to: '/app/invoices',
     label: 'Invoices',
@@ -63,7 +82,12 @@ const nav = [
     permissions: ['sales.read', 'accounting.read'],
   },
   { to: '/app/accounting', label: 'Accounting', icon: Calculator, permissions: ['accounting.read'] },
-  { to: '/app/hospital', label: 'Hospital', icon: HeartPulse, permissions: ['hospital.patients.read'] },
+  {
+    to: '/app/hospital',
+    label: 'Hospital',
+    icon: HeartPulse,
+    permissions: ['hospital.patients.read'],
+  },
   {
     to: '/app/pharmacy',
     label: 'Pharmacy',
@@ -71,7 +95,12 @@ const nav = [
     permissions: ['pharmacy.dispense', 'inventory.products.read'],
     roles: ['PHARMACIST'],
   },
-  { to: '/app/laboratory', label: 'Laboratory', icon: FlaskConical, permissions: ['laboratory.read'] },
+  {
+    to: '/app/laboratory',
+    label: 'Laboratory',
+    icon: FlaskConical,
+    permissions: ['laboratory.read'],
+  },
   {
     to: '/app/hr',
     label: 'HR',
@@ -87,6 +116,27 @@ const nav = [
     permissions: ['settings.company', 'users.manage'],
     roles: ['COMPANY_OWNER', 'ADMINISTRATOR'],
   },
+];
+
+const GROUPS: { id: string; label: string; paths: string[] }[] = [
+  { id: 'home', label: 'Overview', paths: ['/app', '/app/platform', '/app/staff'] },
+  {
+    id: 'sell',
+    label: 'Sell',
+    paths: ['/app/pos', '/app/sales', '/app/customers', '/app/invoices'],
+  },
+  {
+    id: 'stock',
+    label: 'Stock',
+    paths: ['/app/products', '/app/inventory', '/app/purchases', '/app/suppliers'],
+  },
+  { id: 'money', label: 'Money', paths: ['/app/accounting', '/app/reports'] },
+  {
+    id: 'industry',
+    label: 'Industry',
+    paths: ['/app/hospital', '/app/pharmacy', '/app/laboratory'],
+  },
+  { id: 'team', label: 'Business', paths: ['/app/hr', '/app/settings'] },
 ];
 
 interface SidebarProps {
@@ -107,7 +157,6 @@ export function Sidebar({ open, onToggle, mobile, onNavigate }: SidebarProps) {
     return true;
   });
 
-  // Super admin: always pin "All Businesses" near the top so registered tenants are easy to open
   if (isSuperAdmin) {
     const platform = nav.find((n) => n.to === '/app/platform');
     items = items.filter((i) => i.to !== '/app/platform');
@@ -117,13 +166,11 @@ export function Sidebar({ open, onToggle, mobile, onNavigate }: SidebarProps) {
     }
   }
 
-  // Always ensure home exists
   if (!items.some((i) => i.to === '/app')) {
     const home = nav.find((n) => n.to === '/app');
     if (home) items.unshift(home);
   }
 
-  // Ensure cashiers still see POS if permission present
   if (!items.some((i) => i.to === '/app/pos') && permissions.includes('pos.access')) {
     const pos = nav.find((n) => n.to === '/app/pos');
     if (pos) items.splice(1, 0, pos);
@@ -131,7 +178,8 @@ export function Sidebar({ open, onToggle, mobile, onNavigate }: SidebarProps) {
 
   const { data: pendingCount } = useQuery({
     queryKey: ['staff-pending-count'],
-    enabled: permissions.includes('users.manage') || isSuperAdmin || roles.includes('COMPANY_OWNER'),
+    enabled:
+      permissions.includes('users.manage') || isSuperAdmin || roles.includes('COMPANY_OWNER'),
     queryFn: async () => {
       try {
         const res = await api.get('/users/pending/count');
@@ -154,87 +202,98 @@ export function Sidebar({ open, onToggle, mobile, onNavigate }: SidebarProps) {
   const companyName = company?.name || user?.company?.name || 'Enterprise IMS';
   const companyLogoUrl = company?.logoUrl ?? user?.company?.logoUrl;
 
+  const grouped = GROUPS.map((g) => ({
+    ...g,
+    items: items.filter((i) => g.paths.includes(i.to)),
+  })).filter((g) => g.items.length > 0);
+
+  // Any items not in a group
+  const known = new Set(GROUPS.flatMap((g) => g.paths));
+  const orphan = items.filter((i) => !known.has(i.to));
+  if (orphan.length) {
+    grouped.push({ id: 'other', label: 'More', paths: [], items: orphan });
+  }
+
   return (
     <aside
       className={cn(
-        'flex flex-col border-r border-border/80 bg-card/95 backdrop-blur-2xl transition-all duration-300 z-40 min-h-0',
+        'flex flex-col border-r border-border/60 bg-card/90 backdrop-blur-2xl transition-all duration-300 z-40 min-h-0',
         mobile
           ? 'fixed inset-y-0 left-0 w-[min(16.5rem,88vw)] max-w-full shadow-elevated pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)] pl-[env(safe-area-inset-left,0px)]'
           : open
-            ? 'w-[14.5rem]'
-            : 'w-[4rem]',
+            ? 'w-[15rem]'
+            : 'w-[4.25rem]',
         mobile && !open && '-translate-x-full'
       )}
     >
-      <div className="app-topbar border-b border-border/80 shrink-0">
+      <div className="app-topbar border-b border-border/60 shrink-0">
         <div className="app-topbar-inner gap-2.5 px-3">
-        <BrandMark
-          logoUrl={companyLogoUrl}
-          name={companyName}
-          className="h-9 w-9 text-xs ring-2 ring-primary/10 shrink-0"
-        />
-        {(open || mobile) && (
-          <div className="min-w-0 flex-1">
-            <p className="truncate font-bold text-sm font-display tracking-tight">{companyName}</p>
-            <p className="truncate text-[10px] text-muted-foreground font-medium">
-              Business workspace
-            </p>
-          </div>
-        )}
-        {!mobile && (
-          <button
-            onClick={onToggle}
-            className="ml-auto rounded-xl p-1.5 hover:bg-muted text-muted-foreground transition-colors shrink-0"
-            aria-label="Toggle sidebar"
-          >
-            <ChevronLeft className={cn('h-4 w-4 transition-transform', !open && 'rotate-180')} />
-          </button>
-        )}
+          <BrandMark
+            logoUrl={companyLogoUrl}
+            name={companyName}
+            className="h-9 w-9 text-xs ring-2 ring-primary/10 shrink-0"
+          />
+          {(open || mobile) && (
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-bold text-sm font-display tracking-tight">{companyName}</p>
+              <p className="truncate text-[10px] text-muted-foreground font-medium">Workspace</p>
+            </div>
+          )}
+          {!mobile && (
+            <button
+              onClick={onToggle}
+              className="ml-auto rounded-xl p-1.5 hover:bg-muted text-muted-foreground transition-colors shrink-0"
+              aria-label="Toggle sidebar"
+            >
+              <ChevronLeft className={cn('h-4 w-4 transition-transform', !open && 'rotate-180')} />
+            </button>
+          )}
         </div>
       </div>
 
-      <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-2 space-y-0.5 overscroll-contain">
-        {(open || mobile) && (
-          <p className="section-label px-2.5 pt-1 pb-1.5">Menu</p>
-        )}
-        {items.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.end}
-            onClick={onNavigate}
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-[13px] font-medium transition-all duration-200 min-w-0',
-                isActive
-                  ? 'bg-primary text-primary-foreground shadow-glow'
-                  : item.superAdminOnly
-                    ? 'text-primary hover:bg-primary/10'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-              )
-            }
-          >
-            <item.icon className="shrink-0 h-[17px] w-[17px]" />
+      <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-2 space-y-3 overscroll-contain">
+        {grouped.map((group) => (
+          <div key={group.id} className="space-y-0.5">
             {(open || mobile) && (
-              <span className="flex-1 flex items-center justify-between gap-2 min-w-0">
-                <span className="truncate">{tLabel(item.label)}</span>
-                {item.to === '/app/staff' && (pendingCount || 0) > 0 && (
-                  <span className="rounded-full bg-warning text-warning-foreground text-[10px] px-1.5 py-0.5 font-bold shrink-0">
-                    {pendingCount}
-                  </span>
-                )}
-              </span>
+              <p className="section-label px-2.5 pt-1 pb-1">{group.label}</p>
             )}
-          </NavLink>
+            {group.items.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                onClick={onNavigate}
+                className={({ isActive }) =>
+                  cn(
+                    'flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-[13px] font-medium transition-all duration-200 min-w-0',
+                    isActive
+                      ? 'bg-primary text-primary-foreground shadow-glow'
+                      : item.superAdminOnly
+                        ? 'text-primary hover:bg-primary/10'
+                        : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+                  )
+                }
+              >
+                <item.icon className="shrink-0 h-[17px] w-[17px]" />
+                {(open || mobile) && (
+                  <span className="truncate flex-1">{tLabel(item.label)}</span>
+                )}
+                {(open || mobile) &&
+                  item.to === '/app/staff' &&
+                  (pendingCount || 0) > 0 && (
+                    <span className="ml-auto rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1.5 py-0.5 min-w-[1.25rem] text-center">
+                      {pendingCount}
+                    </span>
+                  )}
+              </NavLink>
+            ))}
+          </div>
         ))}
       </nav>
 
       {(open || mobile) && (
-        <div className="border-t border-border p-3 space-y-0.5 shrink-0">
-          <p className="text-[11px] text-muted-foreground truncate">
-            Role: {roles[0]?.replace(/_/g, ' ') || 'User'}
-          </p>
-          <p className="text-[10px] text-muted-foreground">Enterprise IMS</p>
+        <div className="p-3 border-t border-border/60 shrink-0">
+          <p className="text-[10px] text-muted-foreground text-center">Enterprise IMS</p>
         </div>
       )}
     </aside>

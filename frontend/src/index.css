@@ -265,12 +265,60 @@
     margin-left: auto;
     margin-right: auto;
     padding: var(--page-pad-y) var(--page-pad-x);
-    padding-bottom: max(1rem, calc(env(safe-area-inset-bottom) + 0.75rem));
+    /* Space for mobile bottom nav + safe area */
+    padding-bottom: max(1rem, calc(env(safe-area-inset-bottom) + 4.25rem));
     display: flex;
     flex-direction: column;
     gap: var(--page-gap);
     overflow-x: clip;
     @apply animate-in-up;
+  }
+
+  @media (min-width: 1024px) {
+    .page-container {
+      padding-bottom: max(1.25rem, calc(env(safe-area-inset-bottom) + 1rem));
+    }
+  }
+
+  /* Soft ambient page background wash */
+  .bg-grid-fade {
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -20%, hsl(var(--primary) / 0.07), transparent),
+      linear-gradient(to right, hsl(var(--border) / 0.35) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--border) / 0.35) 1px, transparent 1px);
+    background-size: 100% 100%, 28px 28px, 28px 28px;
+  }
+
+  .dark .bg-grid-fade {
+    background-image:
+      radial-gradient(ellipse 70% 40% at 50% -10%, hsl(var(--primary) / 0.12), transparent),
+      linear-gradient(to right, hsl(var(--border) / 0.25) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--border) / 0.25) 1px, transparent 1px);
+  }
+
+  /* Money / KPI number style */
+  .money-value {
+    @apply tabular-nums font-semibold tracking-tight;
+  }
+
+  /* Segmented control (date range, filters) */
+  .segmented {
+    @apply inline-flex flex-wrap items-center gap-0.5 rounded-xl bg-muted/70 p-0.5 border border-border/60;
+  }
+  .segmented-item {
+    @apply h-8 px-2.5 sm:px-3 rounded-lg text-xs font-semibold transition-all duration-200;
+  }
+  .segmented-item-active {
+    @apply bg-card text-foreground shadow-sm border border-border/80;
+  }
+  .segmented-item-idle {
+    @apply text-muted-foreground hover:text-foreground;
+  }
+
+  /* Attention / alert strip */
+  .attention-item {
+    @apply flex items-center gap-3 rounded-xl border border-border/70 bg-card px-3 py-2.5
+      shadow-soft hover:border-primary/25 hover:shadow-md transition-all duration-200;
   }
 
   @media (min-width: 1280px) {
@@ -340,8 +388,8 @@
   }
 
   .kpi-card {
-    @apply relative overflow-hidden rounded-xl border border-border/80 bg-card p-2.5 sm:p-3.5 shadow-soft
-      transition-all duration-300 hover:shadow-elevated hover:border-primary/25 min-w-0;
+    @apply relative overflow-hidden rounded-2xl border border-border/60 bg-card p-3 sm:p-4 shadow-soft
+      transition-all duration-300 hover:shadow-elevated hover:border-primary/20 min-w-0;
   }
 
   .kpi-card::after {

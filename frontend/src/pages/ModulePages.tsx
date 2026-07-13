@@ -628,6 +628,7 @@ export function CustomersPage() {
       const picked = await pickDeviceContact();
       if (!picked) return;
       setForm((prev) => ({
+        ...prev,
         firstName: picked.firstName || prev.firstName,
         lastName: picked.lastName || prev.lastName,
         phone: picked.phone || prev.phone,
@@ -648,10 +649,10 @@ export function CustomersPage() {
   return (
     <PageShell
       title="Customers"
-      description="CRM profiles, balances & loyalty points"
+      description="Call, message, and track balances"
       action={
-        <Button onClick={() => setShow((v) => !v)}>
-          <Plus className="h-4 w-4" /> Add customer
+        <Button onClick={() => setShow((v) => !v)} className="rounded-xl shadow-sm">
+          <Plus className="h-4 w-4" /> Add
         </Button>
       }
     >
@@ -730,10 +731,18 @@ export function CustomersPage() {
           </CardContent>
         </Card>
       )}
-      <DataTable
-        columns={['Code', 'Name', 'Phone', 'Email', 'Balance', 'Credit limit', 'Points']}
-        rows={(data?.data || []).map(
+      {/* Mobile: modern contact cards */}
+      <div className="space-y-2 sm:hidden">
+        {(data?.data || []).length === 0 && (
+          <Card>
+            <CardContent className="py-10 text-center text-sm text-muted-foreground">
+              No customers yet — add your first one
+            </CardContent>
+          </Card>
+        )}
+        {(data?.data || []).map(
           (c: {
+            id?: string;
             code: string;
             firstName?: string;
             lastName?: string;
@@ -747,32 +756,83 @@ export function CustomersPage() {
             const name =
               c.businessName || `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Customer';
             const bal = Number(c.balance || 0);
-            const limit = Number(c.creditLimit || 0);
-            return [
-              c.code,
-              name,
-              <PhoneActions
-                key={`phone-${c.code}`}
-                phone={c.phone}
-                messageBody={
-                  bal > 0
-                    ? `Hi ${name}, reminder: your outstanding balance is ${formatCurrency(bal)}. `
-                    : `Hi ${name}, `
-                }
-              />,
-              c.email || '—',
-              <span
-                key="bal"
-                className={bal > 0 ? 'font-semibold text-warning' : undefined}
-              >
-                {formatCurrency(bal)}
-              </span>,
-              limit > 0 ? formatCurrency(limit) : '—',
-              String(c.loyaltyPoints ?? 0),
-            ];
+            const initial = name.slice(0, 1).toUpperCase();
+            return (
+              <Card key={c.id || c.code} className="border-border/60 shadow-soft">
+                <CardContent className="pt-3.5 pb-3 space-y-2.5">
+                  <div className="flex items-start gap-3">
+                    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary/20 to-accent/15 flex items-center justify-center text-sm font-bold text-primary shrink-0">
+                      {initial}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-sm truncate">{name}</p>
+                      <p className="text-[11px] text-muted-foreground font-mono">{c.code}</p>
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-[11px]">
+                        <span className={bal > 0 ? 'font-semibold text-warning' : 'text-muted-foreground'}>
+                          Bal {formatCurrency(bal)}
+                        </span>
+                        <span className="text-muted-foreground">{c.loyaltyPoints ?? 0} pts</span>
+                      </div>
+                    </div>
+                  </div>
+                  <PhoneActions
+                    phone={c.phone}
+                    messageBody={
+                      bal > 0
+                        ? `Hi ${name}, reminder: your outstanding balance is ${formatCurrency(bal)}. `
+                        : `Hi ${name}, `
+                    }
+                  />
+                </CardContent>
+              </Card>
+            );
           }
         )}
-      />
+      </div>
+
+      {/* Desktop table */}
+      <div className="hidden sm:block">
+        <DataTable
+          columns={['Code', 'Name', 'Phone', 'Email', 'Balance', 'Credit limit', 'Points']}
+          rows={(data?.data || []).map(
+            (c: {
+              code: string;
+              firstName?: string;
+              lastName?: string;
+              businessName?: string;
+              phone?: string;
+              email?: string;
+              balance: number;
+              creditLimit?: number;
+              loyaltyPoints: number;
+            }) => {
+              const name =
+                c.businessName || `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Customer';
+              const bal = Number(c.balance || 0);
+              const limit = Number(c.creditLimit || 0);
+              return [
+                c.code,
+                name,
+                <PhoneActions
+                  key={`phone-${c.code}`}
+                  phone={c.phone}
+                  messageBody={
+                    bal > 0
+                      ? `Hi ${name}, reminder: your outstanding balance is ${formatCurrency(bal)}. `
+                      : `Hi ${name}, `
+                  }
+                />,
+                c.email || '—',
+                <span key="bal" className={bal > 0 ? 'font-semibold text-warning money-value' : 'money-value'}>
+                  {formatCurrency(bal)}
+                </span>,
+                limit > 0 ? formatCurrency(limit) : '—',
+                String(c.loyaltyPoints ?? 0),
+              ];
+            }
+          )}
+        />
+      </div>
     </PageShell>
   );
 }
