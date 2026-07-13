@@ -14,6 +14,10 @@ SEED_PASSWORD=choose-a-strong-password-here
 SEED_ADMIN_EMAIL=admin@demo.local
 SEED_SUPERADMIN_EMAIL=superadmin@ims.local
 
+# Optional: platform bootstrap on API start (same password is fine for local)
+SUPERADMIN_EMAIL=superadmin@ims.local
+SUPERADMIN_PASSWORD=choose-a-strong-password-here
+
 # App secrets (min 32 characters each)
 JWT_ACCESS_SECRET=
 JWT_REFRESH_SECRET=
