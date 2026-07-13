@@ -43,18 +43,12 @@ interface DashboardData {
   kpis: {
     salesToday: number;
     salesTodayCount: number;
-    profitToday?: number;
-    marginToday?: number;
     salesWeek: number;
     salesWeekCount?: number;
-    profitWeek?: number;
-    marginWeek?: number;
     salesMonth: number;
     salesMonthCount: number;
-    profitMonth?: number;
-    marginMonth?: number;
     purchasesMonth: number;
-    /** Selected filter range profit (Today / 7d / 30d / Month / custom) */
+    /** Gross profit for the selected date range */
     profit: number;
     periodSales?: number;
     periodSalesCount?: number;
@@ -195,10 +189,16 @@ export function DashboardPage() {
         : range === '30d'
           ? 'Last 30 days'
           : range === 'mtd'
-            ? 'Month to date'
+            ? 'This month'
             : from && to
               ? `${from} → ${to}`
               : 'Selected period';
+
+  // Period profit follows the date-range buttons (Today / 7d / 30d / Month / Custom)
+  const periodProfit = kpis?.periodProfit ?? kpis?.profit ?? 0;
+  const periodMargin = kpis?.periodMargin ?? kpis?.grossMargin;
+  const periodSales = kpis?.periodSales ?? kpis?.salesMonth ?? 0;
+  const periodSalesCount = kpis?.periodSalesCount ?? kpis?.salesMonthCount ?? 0;
 
   const cards = [
     {
@@ -210,58 +210,28 @@ export function DashboardPage() {
       to: '/app/sales',
     },
     {
-      label: 'Profit Today',
-      value: formatCurrency(kpis?.profitToday ?? kpis?.profit ?? 0),
-      sub:
-        kpis?.marginToday != null
-          ? `${Number(kpis.marginToday).toFixed(1)}% margin · today`
-          : 'Net sales − COGS · today',
-      icon: ShoppingBag,
-      color: 'text-success',
-    },
-    {
       label: 'Weekly Sales',
       value: formatCurrency(kpis?.salesWeek || 0),
-      sub: `${kpis?.salesWeekCount ?? 0} orders · Mon–Sun`,
+      sub: 'This week (Mon–Sun)',
       icon: TrendingUp,
       color: 'text-accent',
     },
     {
-      label: 'Weekly Profit',
-      value: formatCurrency(kpis?.profitWeek ?? 0),
-      sub:
-        kpis?.marginWeek != null
-          ? `${Number(kpis.marginWeek).toFixed(1)}% margin · this week`
-          : 'Net sales − COGS · this week',
+      label: 'Period Sales',
+      value: formatCurrency(periodSales),
+      sub: `${periodSalesCount} sales · ${rangeLabel}`,
       icon: Wallet,
       color: 'text-success',
     },
     {
-      label: 'Monthly Sales',
-      value: formatCurrency(kpis?.salesMonth || 0),
-      sub: `${kpis?.salesMonthCount || 0} sales · this month`,
-      icon: Wallet,
-      color: 'text-primary',
-    },
-    {
-      label: 'Monthly Profit',
-      value: formatCurrency(kpis?.profitMonth ?? 0),
+      label: 'Gross Profit',
+      value: formatCurrency(periodProfit),
       sub:
-        kpis?.marginMonth != null
-          ? `${Number(kpis.marginMonth).toFixed(1)}% margin · this month`
-          : 'Net sales − COGS · this month',
+        periodMargin != null
+          ? `${Number(periodMargin).toFixed(1)}% margin · ${rangeLabel}`
+          : `Net sales − COGS · ${rangeLabel}`,
       icon: ShoppingBag,
       color: 'text-success',
-    },
-    {
-      label: `Profit (${rangeLabel})`,
-      value: formatCurrency(kpis?.periodProfit ?? kpis?.profit ?? 0),
-      sub:
-        kpis?.periodMargin != null || kpis?.grossMargin != null
-          ? `${Number(kpis?.periodMargin ?? kpis?.grossMargin).toFixed(1)}% · filter range`
-          : 'Selected range · net − COGS',
-      icon: TrendingUp,
-      color: 'text-accent',
     },
     {
       label: 'Inventory Value',
@@ -435,7 +405,7 @@ export function DashboardPage() {
       )}
 
       {isLoading ? (
-        <SkeletonKpiGrid count={12} />
+        <SkeletonKpiGrid count={8} />
       ) : (
         <div className="grid gap-2 sm:gap-2.5 grid-cols-2 xl:grid-cols-4 min-w-0">
           {cards.map((card, i) => {

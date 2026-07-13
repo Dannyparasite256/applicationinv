@@ -11,23 +11,11 @@ import {
   subDays,
   format,
 } from 'date-fns';
-import { activeSaleFilter, calculateProfit, type ProfitBreakdown } from '../utils/profit';
+import { activeSaleFilter, calculateProfit } from '../utils/profit';
 
 function requireCompany(companyId?: string | null): string {
   if (!companyId) throw new ForbiddenError('Company context required');
   return companyId;
-}
-
-function profitSlice(p: ProfitBreakdown) {
-  return {
-    sales: p.revenue,
-    netRevenue: p.netRevenue,
-    cogs: p.cogs,
-    profit: p.grossProfit,
-    grossMargin: p.grossMargin,
-    tax: p.tax,
-    saleCount: p.saleCount,
-  };
 }
 
 export async function getDashboardStats(
@@ -37,7 +25,6 @@ export async function getDashboardStats(
   const cid = requireCompany(companyId);
   const now = new Date();
 
-  // Fixed calendar windows — always computed so daily/weekly/monthly cards stay accurate
   const todayStart = startOfDay(now);
   const todayEnd = endOfDay(now);
   const weekStart = startOfWeek(now, { weekStartsOn: 1 });
@@ -45,11 +32,9 @@ export async function getDashboardStats(
   const calendarMonthStart = startOfMonth(now);
   const calendarMonthEnd = endOfMonth(now);
 
-  // Optional filter range for charts / period KPIs (does NOT replace week/month windows).
-  // Controllers pass full-day bounds via parseQueryDate — use them as-is.
+  // Selected filter range (Today / 7d / 30d / MTD / custom) — single profit source of truth
   const periodStart = opts?.from ?? calendarMonthStart;
   const periodEnd = opts?.to ?? calendarMonthEnd;
-  const hasCustomPeriod = Boolean(opts?.from || opts?.to);
 
   const saleWhere: Prisma.SaleWhereInput = {
     ...activeSaleFilter(cid),
@@ -58,9 +43,8 @@ export async function getDashboardStats(
   const branchOpts = { branchId: opts?.branchId };
 
   const [
-    profitToday,
-    profitWeek,
-    profitMonth,
+    salesToday,
+    salesWeek,
     profitPeriod,
     lowStockCount,
     pendingOrders,
@@ -73,10 +57,17 @@ export async function getDashboardStats(
     branchPerf,
     purchasesMonth,
   ] = await Promise.all([
-    calculateProfit(cid, todayStart, todayEnd, branchOpts),
-    calculateProfit(cid, weekStart, weekEnd, branchOpts),
-    calculateProfit(cid, calendarMonthStart, calendarMonthEnd, branchOpts),
-    // Selected range (Today / 7d / 30d / MTD / custom) — same engine as day/week/month
+    prisma.sale.aggregate({
+      where: { ...saleWhere, saleDate: { gte: todayStart, lte: todayEnd } },
+      _sum: { total: true },
+      _count: true,
+    }),
+    prisma.sale.aggregate({
+      where: { ...saleWhere, saleDate: { gte: weekStart, lte: weekEnd } },
+      _sum: { total: true },
+      _count: true,
+    }),
+    // One real COGS calculation for whatever range the user selected
     calculateProfit(cid, periodStart, periodEnd, branchOpts),
     prisma.product
       .count({
@@ -165,7 +156,6 @@ export async function getDashboardStats(
     0
   );
 
-  // Last 14 days sales chart (lightweight aggregates — not full COGS per day)
   const chartDays = 14;
   const salesChart: Array<{ date: string; sales: number; count: number }> = [];
   for (let i = chartDays - 1; i >= 0; i--) {
@@ -200,51 +190,27 @@ export async function getDashboardStats(
 
   const countOf = (v: unknown) => (typeof v === 'number' ? v : Number(v || 0));
 
-  const today = profitSlice(profitToday);
-  const week = profitSlice(profitWeek);
-  const month = profitSlice(profitMonth);
-  const period = profitSlice(profitPeriod);
-
   return {
     kpis: {
-      // Calendar day
-      salesToday: today.sales,
-      salesTodayCount: today.saleCount,
-      profitToday: today.profit,
-      cogsToday: today.cogs,
-      marginToday: today.grossMargin,
-
-      // Calendar week (Mon–Sun)
-      salesWeek: week.sales,
-      salesWeekCount: week.saleCount,
-      profitWeek: week.profit,
-      cogsWeek: week.cogs,
-      marginWeek: week.grossMargin,
-
-      // Calendar month
-      salesMonth: month.sales,
-      salesMonthCount: month.saleCount,
-      profitMonth: month.profit,
-      cogsMonth: month.cogs,
-      marginMonth: month.grossMargin,
-
-      // Selected filter range (Today / 7d / 30d / MTD / custom)
-      periodSales: period.sales,
-      periodSalesCount: period.saleCount,
-      periodProfit: period.profit,
-      periodCogs: period.cogs,
-      periodMargin: period.grossMargin,
-      periodNetRevenue: period.netRevenue,
+      salesToday: Number(salesToday._sum?.total || 0),
+      salesTodayCount: countOf(salesToday._count),
+      salesWeek: Number(salesWeek._sum?.total || 0),
+      salesWeekCount: countOf(salesWeek._count),
+      // Period sales/profit track the selected date range
+      salesMonth: profitPeriod.revenue,
+      salesMonthCount: profitPeriod.saleCount,
+      periodSales: profitPeriod.revenue,
+      periodSalesCount: profitPeriod.saleCount,
+      periodProfit: profitPeriod.grossProfit,
+      periodCogs: profitPeriod.cogs,
+      periodMargin: profitPeriod.grossMargin,
+      periodNetRevenue: profitPeriod.netRevenue,
       periodFrom: periodStart,
       periodTo: periodEnd,
-      hasCustomPeriod,
-
-      // Back-compat: main "Gross Profit" follows the selected range
-      profit: period.profit,
-      cogs: period.cogs,
-      netRevenue: period.netRevenue,
-      grossMargin: period.grossMargin,
-
+      profit: profitPeriod.grossProfit,
+      cogs: profitPeriod.cogs,
+      netRevenue: profitPeriod.netRevenue,
+      grossMargin: profitPeriod.grossMargin,
       purchasesMonth: Number(purchasesMonth._sum?.total || 0),
       inventoryValue,
       lowStock: lowStockCount,
@@ -254,10 +220,15 @@ export async function getDashboardStats(
       outstandingPayments: 0,
     },
     profits: {
-      today,
-      week,
-      month,
-      period,
+      period: {
+        sales: profitPeriod.revenue,
+        netRevenue: profitPeriod.netRevenue,
+        cogs: profitPeriod.cogs,
+        profit: profitPeriod.grossProfit,
+        grossMargin: profitPeriod.grossMargin,
+        tax: profitPeriod.tax,
+        saleCount: profitPeriod.saleCount,
+      },
     },
     salesChart,
     topProducts: topProducts.map((p) => ({
