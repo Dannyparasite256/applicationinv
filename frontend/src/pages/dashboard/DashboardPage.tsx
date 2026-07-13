@@ -43,11 +43,24 @@ interface DashboardData {
   kpis: {
     salesToday: number;
     salesTodayCount: number;
+    profitToday?: number;
+    marginToday?: number;
     salesWeek: number;
+    salesWeekCount?: number;
+    profitWeek?: number;
+    marginWeek?: number;
     salesMonth: number;
     salesMonthCount: number;
+    profitMonth?: number;
+    marginMonth?: number;
     purchasesMonth: number;
+    /** Selected filter range profit (Today / 7d / 30d / Month / custom) */
     profit: number;
+    periodSales?: number;
+    periodSalesCount?: number;
+    periodProfit?: number;
+    periodMargin?: number;
+    periodCogs?: number;
     cogs?: number;
     netRevenue?: number;
     grossMargin?: number;
@@ -88,8 +101,17 @@ export function DashboardPage() {
   const [branchId, setBranchId] = useState('');
 
   const rangeParams = useMemo(() => {
+    /** Local calendar date — avoid toISOString() which shifts the day in non-UTC timezones */
+    const localYmd = (d: Date) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    };
     const end = new Date();
     const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
     if (range === 'today') {
       /* same day */
     } else if (range === '7d') start.setDate(end.getDate() - 6);
@@ -100,9 +122,7 @@ export function DashboardPage() {
     } else {
       start.setDate(1);
     }
-    const f = start.toISOString().slice(0, 10);
-    const t = end.toISOString().slice(0, 10);
-    return { from: f, to: t, branchId: branchId || undefined };
+    return { from: localYmd(start), to: localYmd(end), branchId: branchId || undefined };
   }, [range, from, to, branchId]);
 
   const { data: platformKpis } = useQuery({
@@ -167,23 +187,113 @@ export function DashboardPage() {
     retry: 1,
   });
 
+  const rangeLabel =
+    range === 'today'
+      ? 'Today'
+      : range === '7d'
+        ? 'Last 7 days'
+        : range === '30d'
+          ? 'Last 30 days'
+          : range === 'mtd'
+            ? 'Month to date'
+            : from && to
+              ? `${from} → ${to}`
+              : 'Selected period';
+
   const cards = [
-    { label: 'Sales Today', value: formatCurrency(kpis?.salesToday || 0), sub: `${kpis?.salesTodayCount || 0} orders`, icon: DollarSign, color: 'text-primary', to: '/app/sales' },
-    { label: 'Weekly Sales', value: formatCurrency(kpis?.salesWeek || 0), sub: 'This week', icon: TrendingUp, color: 'text-accent' },
-    { label: 'Monthly Revenue', value: formatCurrency(kpis?.salesMonth || 0), sub: `${kpis?.salesMonthCount || 0} sales`, icon: Wallet, color: 'text-success' },
-    { label: 'Inventory Value', value: formatCurrency(kpis?.inventoryValue || 0), sub: `${kpis?.products || 0} products`, icon: Package, color: 'text-warning', to: '/app/products' },
-    { label: 'Low Stock', value: formatNumber(kpis?.lowStock || 0), sub: 'Items below reorder', icon: AlertTriangle, color: 'text-destructive', to: '/app/inventory#low-stock' },
-    { label: 'Purchases (MTD)', value: formatCurrency(kpis?.purchasesMonth || 0), sub: `${kpis?.pendingOrders || 0} pending`, icon: Truck, color: 'text-primary', to: '/app/purchases' },
-    { label: 'Customers', value: formatNumber(kpis?.customers || 0), sub: 'Active', icon: Users, color: 'text-accent', to: '/app/customers' },
     {
-      label: 'Gross Profit',
-      value: formatCurrency(kpis?.profit || 0),
+      label: 'Sales Today',
+      value: formatCurrency(kpis?.salesToday || 0),
+      sub: `${kpis?.salesTodayCount || 0} orders`,
+      icon: DollarSign,
+      color: 'text-primary',
+      to: '/app/sales',
+    },
+    {
+      label: 'Profit Today',
+      value: formatCurrency(kpis?.profitToday ?? kpis?.profit ?? 0),
       sub:
-        kpis?.grossMargin != null
-          ? `${Number(kpis.grossMargin).toFixed(1)}% margin · net sales − COGS`
-          : 'Net sales − COGS',
+        kpis?.marginToday != null
+          ? `${Number(kpis.marginToday).toFixed(1)}% margin · today`
+          : 'Net sales − COGS · today',
       icon: ShoppingBag,
       color: 'text-success',
+    },
+    {
+      label: 'Weekly Sales',
+      value: formatCurrency(kpis?.salesWeek || 0),
+      sub: `${kpis?.salesWeekCount ?? 0} orders · Mon–Sun`,
+      icon: TrendingUp,
+      color: 'text-accent',
+    },
+    {
+      label: 'Weekly Profit',
+      value: formatCurrency(kpis?.profitWeek ?? 0),
+      sub:
+        kpis?.marginWeek != null
+          ? `${Number(kpis.marginWeek).toFixed(1)}% margin · this week`
+          : 'Net sales − COGS · this week',
+      icon: Wallet,
+      color: 'text-success',
+    },
+    {
+      label: 'Monthly Sales',
+      value: formatCurrency(kpis?.salesMonth || 0),
+      sub: `${kpis?.salesMonthCount || 0} sales · this month`,
+      icon: Wallet,
+      color: 'text-primary',
+    },
+    {
+      label: 'Monthly Profit',
+      value: formatCurrency(kpis?.profitMonth ?? 0),
+      sub:
+        kpis?.marginMonth != null
+          ? `${Number(kpis.marginMonth).toFixed(1)}% margin · this month`
+          : 'Net sales − COGS · this month',
+      icon: ShoppingBag,
+      color: 'text-success',
+    },
+    {
+      label: `Profit (${rangeLabel})`,
+      value: formatCurrency(kpis?.periodProfit ?? kpis?.profit ?? 0),
+      sub:
+        kpis?.periodMargin != null || kpis?.grossMargin != null
+          ? `${Number(kpis?.periodMargin ?? kpis?.grossMargin).toFixed(1)}% · filter range`
+          : 'Selected range · net − COGS',
+      icon: TrendingUp,
+      color: 'text-accent',
+    },
+    {
+      label: 'Inventory Value',
+      value: formatCurrency(kpis?.inventoryValue || 0),
+      sub: `${kpis?.products || 0} products`,
+      icon: Package,
+      color: 'text-warning',
+      to: '/app/products',
+    },
+    {
+      label: 'Low Stock',
+      value: formatNumber(kpis?.lowStock || 0),
+      sub: 'Items below reorder',
+      icon: AlertTriangle,
+      color: 'text-destructive',
+      to: '/app/inventory#low-stock',
+    },
+    {
+      label: 'Purchases (MTD)',
+      value: formatCurrency(kpis?.purchasesMonth || 0),
+      sub: `${kpis?.pendingOrders || 0} pending`,
+      icon: Truck,
+      color: 'text-primary',
+      to: '/app/purchases',
+    },
+    {
+      label: 'Customers',
+      value: formatNumber(kpis?.customers || 0),
+      sub: 'Active',
+      icon: Users,
+      color: 'text-accent',
+      to: '/app/customers',
     },
   ];
 
@@ -325,7 +435,7 @@ export function DashboardPage() {
       )}
 
       {isLoading ? (
-        <SkeletonKpiGrid count={8} />
+        <SkeletonKpiGrid count={12} />
       ) : (
         <div className="grid gap-2 sm:gap-2.5 grid-cols-2 xl:grid-cols-4 min-w-0">
           {cards.map((card, i) => {

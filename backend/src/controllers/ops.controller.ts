@@ -16,6 +16,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { env } from '../config/env';
+import { parseQueryDateRange } from '../utils/dateRange';
 
 // ── Invoices ──────────────────────────────────────────────
 export const listInvoices = asyncHandler(async (req: Request, res: Response) => {
@@ -123,8 +124,7 @@ export const listTransfers = asyncHandler(async (req: Request, res: Response) =>
 
 // ── Reports ───────────────────────────────────────────────
 export const salesReport = asyncHandler(async (req: Request, res: Response) => {
-  const from = req.query.from ? new Date(String(req.query.from)) : undefined;
-  const to = req.query.to ? new Date(String(req.query.to)) : undefined;
+  const { from, to } = parseQueryDateRange(req);
   return success(res, await reportService.salesReport(req.companyId, from, to));
 });
 
@@ -133,8 +133,7 @@ export const inventoryReport = asyncHandler(async (req: Request, res: Response) 
 });
 
 export const profitReport = asyncHandler(async (req: Request, res: Response) => {
-  const from = req.query.from ? new Date(String(req.query.from)) : undefined;
-  const to = req.query.to ? new Date(String(req.query.to)) : undefined;
+  const { from, to } = parseQueryDateRange(req);
   return success(res, await reportService.profitReport(req.companyId, from, to));
 });
 
@@ -143,8 +142,7 @@ export const customerBalances = asyncHandler(async (req: Request, res: Response)
 });
 
 export const exportSalesExcel = asyncHandler(async (req: Request, res: Response) => {
-  const from = req.query.from ? new Date(String(req.query.from)) : undefined;
-  const to = req.query.to ? new Date(String(req.query.to)) : undefined;
+  const { from, to } = parseQueryDateRange(req);
   const buf = await reportService.exportSalesExcel(req.companyId, from, to);
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', 'attachment; filename="sales-report.xlsx"');
@@ -159,8 +157,7 @@ export const exportInventoryExcel = asyncHandler(async (req: Request, res: Respo
 });
 
 export const exportSalesCsv = asyncHandler(async (req: Request, res: Response) => {
-  const from = req.query.from ? new Date(String(req.query.from)) : undefined;
-  const to = req.query.to ? new Date(String(req.query.to)) : undefined;
+  const { from, to } = parseQueryDateRange(req);
   const csv = await reportService.salesCsv(req.companyId, from, to);
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader('Content-Disposition', 'attachment; filename="sales-report.csv"');
@@ -169,8 +166,7 @@ export const exportSalesCsv = asyncHandler(async (req: Request, res: Response) =
 
 // ── Report PDFs (table layout) ────────────────────────────
 export const salesReportPdf = asyncHandler(async (req: Request, res: Response) => {
-  const from = req.query.from ? new Date(String(req.query.from)) : undefined;
-  const to = req.query.to ? new Date(String(req.query.to)) : undefined;
+  const { from, to } = parseQueryDateRange(req);
   const { salesReportPdf: build } = await import('../services/reportPdf.service');
   const buf = await build(req.companyId, from, to);
   res.setHeader('Content-Type', 'application/pdf');
@@ -187,8 +183,7 @@ export const inventoryReportPdf = asyncHandler(async (req: Request, res: Respons
 });
 
 export const profitReportPdf = asyncHandler(async (req: Request, res: Response) => {
-  const from = req.query.from ? new Date(String(req.query.from)) : undefined;
-  const to = req.query.to ? new Date(String(req.query.to)) : undefined;
+  const { from, to } = parseQueryDateRange(req);
   const { profitReportPdf: build } = await import('../services/reportPdf.service');
   const buf = await build(req.companyId, from, to);
   res.setHeader('Content-Type', 'application/pdf');
@@ -217,8 +212,7 @@ export const arAgingPdf = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const customerStatement = asyncHandler(async (req: Request, res: Response) => {
-  const from = req.query.from ? new Date(String(req.query.from)) : undefined;
-  const to = req.query.to ? new Date(String(req.query.to)) : undefined;
+  const { from, to } = parseQueryDateRange(req);
   return success(
     res,
     await reportService.customerStatement(req.companyId, req.params.id, from, to)
@@ -226,8 +220,7 @@ export const customerStatement = asyncHandler(async (req: Request, res: Response
 });
 
 export const customerStatementPdf = asyncHandler(async (req: Request, res: Response) => {
-  const from = req.query.from ? new Date(String(req.query.from)) : undefined;
-  const to = req.query.to ? new Date(String(req.query.to)) : undefined;
+  const { from, to } = parseQueryDateRange(req);
   const { customerStatementPdf: build } = await import('../services/reportPdf.service');
   const buf = await build(req.companyId, req.params.id, from, to);
   res.setHeader('Content-Type', 'application/pdf');

@@ -11,11 +11,23 @@ import {
   subDays,
   format,
 } from 'date-fns';
-import { activeSaleFilter, calculateProfit } from '../utils/profit';
+import { activeSaleFilter, calculateProfit, type ProfitBreakdown } from '../utils/profit';
 
 function requireCompany(companyId?: string | null): string {
   if (!companyId) throw new ForbiddenError('Company context required');
   return companyId;
+}
+
+function profitSlice(p: ProfitBreakdown) {
+  return {
+    sales: p.revenue,
+    netRevenue: p.netRevenue,
+    cogs: p.cogs,
+    profit: p.grossProfit,
+    grossMargin: p.grossMargin,
+    tax: p.tax,
+    saleCount: p.saleCount,
+  };
 }
 
 export async function getDashboardStats(
@@ -24,23 +36,32 @@ export async function getDashboardStats(
 ) {
   const cid = requireCompany(companyId);
   const now = new Date();
+
+  // Fixed calendar windows — always computed so daily/weekly/monthly cards stay accurate
   const todayStart = startOfDay(now);
   const todayEnd = endOfDay(now);
   const weekStart = startOfWeek(now, { weekStartsOn: 1 });
   const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
-  const monthStart = opts?.from ? startOfDay(opts.from) : startOfMonth(now);
-  const monthEnd = opts?.to ? endOfDay(opts.to) : endOfMonth(now);
+  const calendarMonthStart = startOfMonth(now);
+  const calendarMonthEnd = endOfMonth(now);
+
+  // Optional filter range for charts / period KPIs (does NOT replace week/month windows).
+  // Controllers pass full-day bounds via parseQueryDate — use them as-is.
+  const periodStart = opts?.from ?? calendarMonthStart;
+  const periodEnd = opts?.to ?? calendarMonthEnd;
+  const hasCustomPeriod = Boolean(opts?.from || opts?.to);
 
   const saleWhere: Prisma.SaleWhereInput = {
     ...activeSaleFilter(cid),
     ...(opts?.branchId ? { branchId: opts.branchId } : {}),
   };
+  const branchOpts = { branchId: opts?.branchId };
 
   const [
-    salesToday,
-    salesWeek,
-    salesMonth,
-    purchasesMonth,
+    profitToday,
+    profitWeek,
+    profitMonth,
+    profitPeriod,
     lowStockCount,
     pendingOrders,
     customerCount,
@@ -50,45 +71,32 @@ export async function getDashboardStats(
     topCustomers,
     recentSales,
     branchPerf,
+    purchasesMonth,
   ] = await Promise.all([
-    prisma.sale.aggregate({
-      where: { ...saleWhere, saleDate: { gte: todayStart, lte: todayEnd } },
-      _sum: { total: true, paidAmount: true },
-      _count: true,
-    }),
-    prisma.sale.aggregate({
-      where: { ...saleWhere, saleDate: { gte: weekStart, lte: weekEnd } },
-      _sum: { total: true },
-      _count: true,
-    }),
-    prisma.sale.aggregate({
-      where: { ...saleWhere, saleDate: { gte: monthStart, lte: monthEnd } },
-      _sum: { total: true, taxAmount: true, discountAmount: true },
-      _count: true,
-    }),
-    prisma.purchaseOrder.aggregate({
+    calculateProfit(cid, todayStart, todayEnd, branchOpts),
+    calculateProfit(cid, weekStart, weekEnd, branchOpts),
+    calculateProfit(cid, calendarMonthStart, calendarMonthEnd, branchOpts),
+    // Selected range (Today / 7d / 30d / MTD / custom) — same engine as day/week/month
+    calculateProfit(cid, periodStart, periodEnd, branchOpts),
+    prisma.product
+      .count({
+        where: { companyId: cid, deletedAt: null, isActive: true, trackInventory: true },
+      })
+      .then(async () => {
+        const products = await prisma.product.findMany({
+          where: { companyId: cid, deletedAt: null, isActive: true, trackInventory: true },
+          include: { stockLevels: true },
+        });
+        return products.filter(
+          (p) =>
+            p.stockLevels.reduce((s, l) => s + Number(l.quantity), 0) <= Number(p.reorderLevel)
+        ).length;
+      }),
+    prisma.purchaseOrder.count({
       where: {
         companyId: cid,
-        deletedAt: null,
-        createdAt: { gte: monthStart, lte: monthEnd },
-        status: { not: 'CANCELLED' },
+        status: { in: ['PENDING_APPROVAL', 'ORDERED', 'PARTIALLY_RECEIVED'] },
       },
-      _sum: { total: true },
-      _count: true,
-    }),
-    prisma.product.count({
-      where: { companyId: cid, deletedAt: null, isActive: true, trackInventory: true },
-    }).then(async () => {
-      const products = await prisma.product.findMany({
-        where: { companyId: cid, deletedAt: null, isActive: true, trackInventory: true },
-        include: { stockLevels: true },
-      });
-      return products.filter(
-        (p) => p.stockLevels.reduce((s, l) => s + Number(l.quantity), 0) <= Number(p.reorderLevel)
-      ).length;
-    }),
-    prisma.purchaseOrder.count({
-      where: { companyId: cid, status: { in: ['PENDING_APPROVAL', 'ORDERED', 'PARTIALLY_RECEIVED'] } },
     }),
     prisma.customer.count({ where: { companyId: cid, deletedAt: null, isActive: true } }),
     prisma.product.count({ where: { companyId: cid, deletedAt: null, isActive: true } }),
@@ -101,7 +109,8 @@ export async function getDashboardStats(
       where: {
         sale: {
           ...activeSaleFilter(cid),
-          saleDate: { gte: monthStart },
+          saleDate: { gte: periodStart, lte: periodEnd },
+          ...(opts?.branchId ? { branchId: opts.branchId } : {}),
         },
       },
       _sum: { quantity: true, total: true },
@@ -113,7 +122,8 @@ export async function getDashboardStats(
       where: {
         ...activeSaleFilter(cid),
         customerId: { not: null },
-        saleDate: { gte: monthStart },
+        saleDate: { gte: periodStart, lte: periodEnd },
+        ...(opts?.branchId ? { branchId: opts.branchId } : {}),
       },
       _sum: { total: true },
       _count: true,
@@ -132,7 +142,18 @@ export async function getDashboardStats(
       by: ['branchId'],
       where: {
         ...activeSaleFilter(cid),
-        saleDate: { gte: monthStart },
+        saleDate: { gte: periodStart, lte: periodEnd },
+        ...(opts?.branchId ? { branchId: opts.branchId } : {}),
+      },
+      _sum: { total: true },
+      _count: true,
+    }),
+    prisma.purchaseOrder.aggregate({
+      where: {
+        companyId: cid,
+        deletedAt: null,
+        createdAt: { gte: calendarMonthStart, lte: calendarMonthEnd },
+        status: { not: 'CANCELLED' },
       },
       _sum: { total: true },
       _count: true,
@@ -144,7 +165,7 @@ export async function getDashboardStats(
     0
   );
 
-  // Last 14 days sales chart
+  // Last 14 days sales chart (lightweight aggregates — not full COGS per day)
   const chartDays = 14;
   const salesChart: Array<{ date: string; sales: number; count: number }> = [];
   for (let i = chartDays - 1; i >= 0; i--) {
@@ -163,7 +184,6 @@ export async function getDashboardStats(
     });
   }
 
-  // Resolve top customers names
   const customerIds = topCustomers.map((c) => c.customerId).filter(Boolean) as string[];
   const customers = await prisma.customer.findMany({
     where: { id: { in: customerIds } },
@@ -171,7 +191,6 @@ export async function getDashboardStats(
   });
   const custMap = new Map(customers.map((c) => [c.id, c]));
 
-  // Branch names
   const branchIds = branchPerf.map((b) => b.branchId).filter(Boolean) as string[];
   const branches = await prisma.branch.findMany({
     where: { id: { in: branchIds } },
@@ -179,34 +198,66 @@ export async function getDashboardStats(
   });
   const branchMap = new Map(branches.map((b) => [b.id, b.name]));
 
-  const revenue = Number(salesMonth._sum?.total || 0);
-
-  // Real gross profit (same engine as /reports/profit) — not a fixed margin estimate
-  const profitBreakdown = await calculateProfit(cid, monthStart, monthEnd, {
-    branchId: opts?.branchId,
-  });
-
   const countOf = (v: unknown) => (typeof v === 'number' ? v : Number(v || 0));
+
+  const today = profitSlice(profitToday);
+  const week = profitSlice(profitWeek);
+  const month = profitSlice(profitMonth);
+  const period = profitSlice(profitPeriod);
 
   return {
     kpis: {
-      salesToday: Number(salesToday._sum?.total || 0),
-      salesTodayCount: countOf(salesToday._count),
-      salesWeek: Number(salesWeek._sum?.total || 0),
-      salesMonth: revenue,
-      salesMonthCount: countOf(salesMonth._count),
+      // Calendar day
+      salesToday: today.sales,
+      salesTodayCount: today.saleCount,
+      profitToday: today.profit,
+      cogsToday: today.cogs,
+      marginToday: today.grossMargin,
+
+      // Calendar week (Mon–Sun)
+      salesWeek: week.sales,
+      salesWeekCount: week.saleCount,
+      profitWeek: week.profit,
+      cogsWeek: week.cogs,
+      marginWeek: week.grossMargin,
+
+      // Calendar month
+      salesMonth: month.sales,
+      salesMonthCount: month.saleCount,
+      profitMonth: month.profit,
+      cogsMonth: month.cogs,
+      marginMonth: month.grossMargin,
+
+      // Selected filter range (Today / 7d / 30d / MTD / custom)
+      periodSales: period.sales,
+      periodSalesCount: period.saleCount,
+      periodProfit: period.profit,
+      periodCogs: period.cogs,
+      periodMargin: period.grossMargin,
+      periodNetRevenue: period.netRevenue,
+      periodFrom: periodStart,
+      periodTo: periodEnd,
+      hasCustomPeriod,
+
+      // Back-compat: main "Gross Profit" follows the selected range
+      profit: period.profit,
+      cogs: period.cogs,
+      netRevenue: period.netRevenue,
+      grossMargin: period.grossMargin,
+
       purchasesMonth: Number(purchasesMonth._sum?.total || 0),
-      /** Gross profit = net sales (ex-tax) − COGS from sale-line cost snapshots */
-      profit: profitBreakdown.grossProfit,
-      cogs: profitBreakdown.cogs,
-      netRevenue: profitBreakdown.netRevenue,
-      grossMargin: profitBreakdown.grossMargin,
       inventoryValue,
       lowStock: lowStockCount,
       pendingOrders,
       customers: customerCount,
       products: productCount,
       outstandingPayments: 0,
+    },
+    profits: {
+      today,
+      week,
+      month,
+      period,
     },
     salesChart,
     topProducts: topProducts.map((p) => ({

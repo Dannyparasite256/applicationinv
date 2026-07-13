@@ -51,6 +51,7 @@ export async function calculateProfit(
   to?: Date,
   opts?: { branchId?: string }
 ): Promise<ProfitBreakdown> {
+  // Callers should pass full-day bounds (startOfDay / endOfDay or parseQueryDate)
   const fromDate = from || startOfMonth(new Date());
   const toDate = to || endOfDay(new Date());
 
