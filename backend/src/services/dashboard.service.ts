@@ -1,4 +1,4 @@
-import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { ForbiddenError } from '../utils/errors';
 import {
@@ -11,20 +11,11 @@ import {
   subDays,
   format,
 } from 'date-fns';
+import { activeSaleFilter, calculateProfit } from '../utils/profit';
 
 function requireCompany(companyId?: string | null): string {
   if (!companyId) throw new ForbiddenError('Company context required');
   return companyId;
-}
-
-/** Sales that count toward revenue / profit (excludes deleted, cancelled, refunded/returned). */
-function activeSaleFilter(companyId: string): Prisma.SaleWhereInput {
-  return {
-    companyId,
-    deletedAt: null,
-    status: { notIn: [OrderStatus.CANCELLED, OrderStatus.RETURNED] },
-    paymentStatus: { notIn: [PaymentStatus.REFUNDED, PaymentStatus.VOID] },
-  };
 }
 
 export async function getDashboardStats(
@@ -189,8 +180,11 @@ export async function getDashboardStats(
   const branchMap = new Map(branches.map((b) => [b.id, b.name]));
 
   const revenue = Number(salesMonth._sum?.total || 0);
-  const cogsEstimate = revenue * 0.6; // simplified until full COGS posting
-  const profit = revenue - cogsEstimate - Number(purchasesMonth._sum?.total || 0) * 0;
+
+  // Real gross profit (same engine as /reports/profit) — not a fixed margin estimate
+  const profitBreakdown = await calculateProfit(cid, monthStart, monthEnd, {
+    branchId: opts?.branchId,
+  });
 
   const countOf = (v: unknown) => (typeof v === 'number' ? v : Number(v || 0));
 
@@ -202,7 +196,11 @@ export async function getDashboardStats(
       salesMonth: revenue,
       salesMonthCount: countOf(salesMonth._count),
       purchasesMonth: Number(purchasesMonth._sum?.total || 0),
-      profit,
+      /** Gross profit = net sales (ex-tax) − COGS from sale-line cost snapshots */
+      profit: profitBreakdown.grossProfit,
+      cogs: profitBreakdown.cogs,
+      netRevenue: profitBreakdown.netRevenue,
+      grossMargin: profitBreakdown.grossMargin,
       inventoryValue,
       lowStock: lowStockCount,
       pendingOrders,

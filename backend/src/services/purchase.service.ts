@@ -3,6 +3,7 @@ import { prisma } from '../config/database';
 import { NotFoundError, ForbiddenError, ValidationError } from '../utils/errors';
 import { generateDocNo } from '../utils/crypto';
 import { PaginationParams, buildOrderBy } from '../utils/pagination';
+import { weightedAverageCost } from '../utils/profit';
 
 function requireCompany(companyId?: string | null): string {
   if (!companyId) throw new ForbiddenError('Company context required');
@@ -284,6 +285,25 @@ export async function receivePurchase(
       const existing = await tx.stockLevel.findFirst({
         where: { productId: line.productId, warehouseId },
       });
+
+      // On-hand across all warehouses before this receipt (for weighted avg cost)
+      const stockBefore = await tx.stockLevel.aggregate({
+        where: { productId: line.productId },
+        _sum: { quantity: true },
+      });
+      const oldQty = Number(stockBefore._sum?.quantity || 0);
+      const product = await tx.product.findUnique({
+        where: { id: line.productId },
+        select: { costPrice: true },
+      });
+      const unitCost = Number(line.unitCost);
+      const newAvgCost = weightedAverageCost(
+        oldQty,
+        Number(product?.costPrice || 0),
+        qty,
+        unitCost
+      );
+
       if (existing) {
         await tx.stockLevel.update({
           where: { id: existing.id },
@@ -299,6 +319,12 @@ export async function receivePurchase(
         });
       }
 
+      // Keep product master cost in sync so inventory value and future sales COGS are accurate
+      await tx.product.update({
+        where: { id: line.productId },
+        data: { costPrice: newAvgCost },
+      });
+
       await tx.stockMovement.create({
         data: {
           companyId: cid,
@@ -306,7 +332,7 @@ export async function receivePurchase(
           warehouseId,
           type: 'PURCHASE',
           quantity: qty,
-          unitCost: Number(line.unitCost),
+          unitCost,
           reference: po.orderNo,
           referenceId: po.id,
           batchNumber: recv.batchNumber || line.batchNumber || undefined,
@@ -328,11 +354,12 @@ export async function receivePurchase(
             batchNumber: batchNo,
             expiryDate: recv.expiryDate || line.expiryDate || undefined,
             quantity: qty,
-            costPrice: Number(line.unitCost),
+            costPrice: unitCost,
             supplierId: po.supplierId,
           },
           update: {
             quantity: { increment: qty },
+            costPrice: unitCost,
           },
         });
       }

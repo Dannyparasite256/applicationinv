@@ -1,7 +1,8 @@
 import ExcelJS from 'exceljs';
 import { prisma } from '../config/database';
 import { ForbiddenError, NotFoundError } from '../utils/errors';
-import { startOfDay, endOfDay, startOfMonth, endOfMonth, format } from 'date-fns';
+import { endOfDay, startOfMonth, format } from 'date-fns';
+import { calculateProfit } from '../utils/profit';
 
 function requireCompany(companyId?: string | null): string {
   if (!companyId) throw new ForbiddenError('Company context required');
@@ -93,47 +94,21 @@ export async function inventoryReport(companyId: string | null | undefined) {
 
 export async function profitReport(companyId: string | null | undefined, from?: Date, to?: Date) {
   const cid = requireCompany(companyId);
-  const fromDate = from || startOfMonth(new Date());
-  const toDate = to || endOfDay(new Date());
-
-  const saleItems = await prisma.saleItem.findMany({
-    where: {
-      sale: {
-        companyId: cid,
-        deletedAt: null,
-        saleDate: { gte: fromDate, lte: toDate },
-        status: { notIn: ['CANCELLED', 'RETURNED'] },
-        paymentStatus: { notIn: ['REFUNDED', 'VOID'] },
-      },
-    },
-    include: { product: { select: { costPrice: true, name: true } } },
-  });
-
-  let revenue = 0;
-  let cogs = 0;
-  for (const item of saleItems) {
-    revenue += Number(item.total);
-    cogs += Number(item.product.costPrice) * Number(item.quantity);
-  }
-
-  const purchases = await prisma.purchaseOrder.aggregate({
-    where: {
-      companyId: cid,
-      deletedAt: null,
-      createdAt: { gte: fromDate, lte: toDate },
-      status: { not: 'CANCELLED' },
-    },
-    _sum: { total: true },
-  });
-
+  const p = await calculateProfit(cid, from, to);
   return {
-    from: fromDate,
-    to: toDate,
-    revenue,
-    cogs,
-    grossProfit: revenue - cogs,
-    grossMargin: revenue > 0 ? ((revenue - cogs) / revenue) * 100 : 0,
-    purchases: Number(purchases._sum.total || 0),
+    from: p.from,
+    to: p.to,
+    /** Gross sales including tax (matches dashboard / sales totals) */
+    revenue: p.revenue,
+    /** Net sales excluding tax (used for gross profit base) */
+    netRevenue: p.netRevenue,
+    tax: p.tax,
+    cogs: p.cogs,
+    /** Gross profit = net revenue − COGS */
+    grossProfit: p.grossProfit,
+    grossMargin: p.grossMargin,
+    purchases: p.purchases,
+    saleCount: p.saleCount,
   };
 }
 

@@ -2198,9 +2198,10 @@ export function AccountingPage() {
   return (
     <PageShell title="Accounting" description="Chart of accounts & profit snapshot">
       {profit && (
-        <div className="grid gap-3 sm:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {[
-            { label: 'Revenue', value: profit.revenue },
+            { label: 'Gross sales', value: profit.revenue },
+            { label: 'Net sales', value: profit.netRevenue ?? profit.revenue },
             { label: 'COGS', value: profit.cogs },
             { label: 'Gross Profit', value: profit.grossProfit },
             { label: 'Margin %', value: profit.grossMargin, isPct: true },
@@ -2537,23 +2538,28 @@ function ReportTable({ kind, data }: { kind: ReportKind; data: unknown }) {
       from?: string;
       to?: string;
       revenue?: number;
+      netRevenue?: number;
+      tax?: number;
       cogs?: number;
       grossProfit?: number;
       grossMargin?: number;
       purchases?: number;
     };
     const lines = [
-      { label: 'Revenue (sales)', value: d.revenue },
+      { label: 'Gross sales (incl. tax)', value: d.revenue },
+      { label: 'Tax collected', value: d.tax },
+      { label: 'Net sales (ex-tax)', value: d.netRevenue ?? d.revenue },
       { label: 'Cost of goods sold', value: d.cogs },
       { label: 'Gross profit', value: d.grossProfit, emphasis: true },
-      { label: 'Purchases (period)', value: d.purchases },
+      { label: 'Purchases (period, reference)', value: d.purchases },
     ];
     return (
       <div className="space-y-3">
         <p className="text-xs text-muted-foreground">
           {d.from ? new Date(d.from).toLocaleDateString() : '—'} –{' '}
           {d.to ? new Date(d.to).toLocaleDateString() : '—'}
-          {d.grossMargin != null ? ` · Margin ${Number(d.grossMargin).toFixed(1)}%` : ''}
+          {d.grossMargin != null ? ` · Margin ${Number(d.grossMargin).toFixed(1)}% on net sales` : ''}
+          {' · Gross profit = net sales − COGS'}
         </p>
         <div className="table-scroll rounded-xl border border-border overflow-auto">
           <table className="w-full text-sm">

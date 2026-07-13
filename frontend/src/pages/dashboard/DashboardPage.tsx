@@ -48,6 +48,9 @@ interface DashboardData {
     salesMonthCount: number;
     purchasesMonth: number;
     profit: number;
+    cogs?: number;
+    netRevenue?: number;
+    grossMargin?: number;
     inventoryValue: number;
     lowStock: number;
     pendingOrders: number;
@@ -172,7 +175,16 @@ export function DashboardPage() {
     { label: 'Low Stock', value: formatNumber(kpis?.lowStock || 0), sub: 'Items below reorder', icon: AlertTriangle, color: 'text-destructive', to: '/app/inventory#low-stock' },
     { label: 'Purchases (MTD)', value: formatCurrency(kpis?.purchasesMonth || 0), sub: `${kpis?.pendingOrders || 0} pending`, icon: Truck, color: 'text-primary', to: '/app/purchases' },
     { label: 'Customers', value: formatNumber(kpis?.customers || 0), sub: 'Active', icon: Users, color: 'text-accent', to: '/app/customers' },
-    { label: 'Est. Profit', value: formatCurrency(kpis?.profit || 0), sub: 'Monthly estimate', icon: ShoppingBag, color: 'text-success' },
+    {
+      label: 'Gross Profit',
+      value: formatCurrency(kpis?.profit || 0),
+      sub:
+        kpis?.grossMargin != null
+          ? `${Number(kpis.grossMargin).toFixed(1)}% margin · net sales − COGS`
+          : 'Net sales − COGS',
+      icon: ShoppingBag,
+      color: 'text-success',
+    },
   ];
 
   const topName = data?.topProducts?.[0]?.name;

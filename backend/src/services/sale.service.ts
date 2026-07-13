@@ -80,11 +80,20 @@ export async function createSale(
   }
 
   const productIds = input.items.map((i) => i.productId);
-  const products = await prisma.product.findMany({
-    where: { id: { in: productIds }, companyId: cid, deletedAt: null },
-    include: { tax: true },
-  });
+  const variantIds = input.items.map((i) => i.variantId).filter(Boolean) as string[];
+  const [products, variants] = await Promise.all([
+    prisma.product.findMany({
+      where: { id: { in: productIds }, companyId: cid, deletedAt: null },
+      include: { tax: true },
+    }),
+    variantIds.length
+      ? prisma.productVariant.findMany({
+          where: { id: { in: variantIds }, productId: { in: productIds } },
+        })
+      : Promise.resolve([]),
+  ]);
   const productMap = new Map(products.map((p) => [p.id, p]));
+  const variantMap = new Map(variants.map((v) => [v.id, v]));
 
   let subtotal = 0;
   let taxAmount = 0;
@@ -95,6 +104,8 @@ export async function createSale(
     sku: string | null;
     quantity: number;
     unitPrice: number;
+    /** Unit cost snapshot for COGS */
+    costPrice: number;
     discount: number;
     taxAmount: number;
     total: number;
@@ -113,7 +124,17 @@ export async function createSale(
     if (!Number.isFinite(qty) || qty <= 0) {
       throw new ValidationError(`Invalid quantity for ${product.name}`);
     }
-    const unitPrice = item.unitPrice != null ? Number(item.unitPrice) : Number(product.sellingPrice);
+    const variant = item.variantId ? variantMap.get(item.variantId) : undefined;
+    const unitPrice =
+      item.unitPrice != null
+        ? Number(item.unitPrice)
+        : variant
+          ? Number(variant.sellingPrice)
+          : Number(product.sellingPrice);
+    // Snapshot cost at sale time (variant cost when present, else product master)
+    const costPrice = variant
+      ? Number(variant.costPrice) || Number(product.costPrice) || 0
+      : Number(product.costPrice) || 0;
     const discount = Number(item.discount ?? 0) || 0;
     const lineSub = unitPrice * qty - discount;
     if (lineSub < 0) throw new ValidationError(`Discount too large for ${product.name}`);
@@ -125,9 +146,10 @@ export async function createSale(
       productId: product.id,
       variantId: item.variantId,
       productName: product.name,
-      sku: product.sku,
+      sku: variant?.sku || product.sku,
       quantity: qty,
       unitPrice,
+      costPrice,
       discount,
       taxAmount: lineTax,
       total: lineSub + lineTax,
@@ -299,6 +321,7 @@ export async function createSale(
                 sku: li.sku,
                 quantity: li.quantity,
                 unitPrice: li.unitPrice,
+                costPrice: li.costPrice,
                 discount: li.discount,
                 taxAmount: li.taxAmount,
                 total: li.total,
@@ -379,7 +402,7 @@ export async function createSale(
               warehouseId: deductWarehouseId,
               type: 'SALE',
               quantity: -li.quantity,
-              unitCost: li.unitPrice,
+              unitCost: li.costPrice,
               reference: saleNo,
               referenceId: sale.id,
               batchNumber: li.batchNumber || undefined,
@@ -563,29 +586,23 @@ async function restoreSaleInventory(
     id: string;
     saleNo: string;
     warehouseId: string | null;
-    items: Array<{ productId: string; quantity: unknown; unitPrice: unknown; productName?: string }>;
+    items: Array<{
+      productId: string;
+      quantity: unknown;
+      unitPrice?: unknown;
+      costPrice?: unknown;
+      productName?: string;
+    }>;
   },
   userId: string,
-  notes: string
+  notes: string,
+  /** When set, only restore these product/qty pairs (partial refund) instead of full SALE movements */
+  partialRestocks?: Array<{ productId: string; quantity: number; unitCost: number }>
 ) {
-  const saleMovements = await tx.stockMovement.findMany({
-    where: { referenceId: sale.id, type: 'SALE', companyId: cid },
-  });
-
   type Restock = { productId: string; warehouseId: string; quantity: number; unitCost: number };
   const restocks: Restock[] = [];
 
-  if (saleMovements.length > 0) {
-    for (const m of saleMovements) {
-      restocks.push({
-        productId: m.productId,
-        warehouseId: m.warehouseId,
-        quantity: Math.abs(Number(m.quantity)),
-        unitCost: Number(m.unitCost ?? 0),
-      });
-    }
-  } else {
-    // Fallback: use line items + sale warehouse
+  if (partialRestocks?.length) {
     let warehouseId = sale.warehouseId || undefined;
     if (!warehouseId) {
       const wh =
@@ -598,18 +615,71 @@ async function restoreSaleInventory(
         }));
       warehouseId = wh?.id;
     }
+    // Prefer original SALE movement warehouse per product when available
+    const saleMovements = await tx.stockMovement.findMany({
+      where: { referenceId: sale.id, type: 'SALE', companyId: cid },
+    });
+    const whByProduct = new Map<string, string>();
+    for (const m of saleMovements) {
+      if (!whByProduct.has(m.productId)) whByProduct.set(m.productId, m.warehouseId);
+    }
+    if (!warehouseId && saleMovements[0]) warehouseId = saleMovements[0].warehouseId;
     if (!warehouseId) {
       throw new ValidationError('No warehouse available to restore stock');
     }
-    for (const item of sale.items) {
-      const product = await tx.product.findUnique({ where: { id: item.productId } });
-      if (!product?.trackInventory) continue;
+    for (const p of partialRestocks) {
       restocks.push({
-        productId: item.productId,
-        warehouseId,
-        quantity: Number(item.quantity),
-        unitCost: Number(item.unitPrice),
+        productId: p.productId,
+        warehouseId: whByProduct.get(p.productId) || warehouseId,
+        quantity: p.quantity,
+        unitCost: p.unitCost,
       });
+    }
+  } else {
+    const saleMovements = await tx.stockMovement.findMany({
+      where: { referenceId: sale.id, type: 'SALE', companyId: cid },
+    });
+
+    if (saleMovements.length > 0) {
+      for (const m of saleMovements) {
+        restocks.push({
+          productId: m.productId,
+          warehouseId: m.warehouseId,
+          quantity: Math.abs(Number(m.quantity)),
+          unitCost: Number(m.unitCost ?? 0),
+        });
+      }
+    } else {
+      // Fallback: use line items + sale warehouse (cost snapshot preferred over selling price)
+      let warehouseId = sale.warehouseId || undefined;
+      if (!warehouseId) {
+        const wh =
+          (await tx.warehouse.findFirst({
+            where: { companyId: cid, isDefault: true, isActive: true },
+          })) ||
+          (await tx.warehouse.findFirst({
+            where: { companyId: cid, isActive: true },
+            orderBy: { createdAt: 'asc' },
+          }));
+        warehouseId = wh?.id;
+      }
+      if (!warehouseId) {
+        throw new ValidationError('No warehouse available to restore stock');
+      }
+      for (const item of sale.items) {
+        const product = await tx.product.findUnique({ where: { id: item.productId } });
+        if (!product?.trackInventory) continue;
+        const unitCost =
+          Number(item.costPrice) > 0
+            ? Number(item.costPrice)
+            : Number(product.costPrice) || Number(item.unitPrice) || 0;
+        restocks.push({
+          productId: item.productId,
+          warehouseId,
+          quantity: Number(item.quantity),
+          unitCost,
+        });
+      }
     }
   }
 
@@ -684,36 +754,75 @@ export async function refundSale(
   // Partial: return selected line quantities only
   if (mode === 'PARTIAL' && input?.items?.length) {
     const itemMap = new Map(sale.items.map((it) => [it.id, it]));
-    const restoreLines: Array<{
+    const lineUpdates: Array<{
+      id: string;
+      newQty: number;
+      newDiscount: number;
+      newTax: number;
+      newTotal: number;
       productId: string;
-      quantity: number;
-      unitPrice: number;
-      productName?: string;
+      returnQty: number;
+      unitCost: number;
     }> = [];
     let refundTotal = 0;
+    let refundSubtotal = 0;
+    let refundTax = 0;
+    let refundLineDiscount = 0;
 
     for (const line of input.items) {
       const src = itemMap.get(line.saleItemId);
       if (!src) throw new ValidationError('Invalid sale line for partial refund');
       const qty = Number(line.quantity);
       const max = Number(src.quantity);
-      if (!Number.isFinite(qty) || qty <= 0 || qty > max) {
+      if (!Number.isFinite(qty) || qty <= 0 || qty > max + 0.0001) {
         throw new ValidationError(`Invalid return qty for ${src.productName || src.productId}`);
       }
-      const unit = Number(src.unitPrice);
-      const lineTotal = (qty / max) * Number(src.total);
+      const ratio = max > 0 ? qty / max : 0;
+      const lineTotal = ratio * Number(src.total);
+      const lineTax = ratio * Number(src.taxAmount);
+      const lineDisc = ratio * Number(src.discount);
+      const lineSub = lineTotal - lineTax; // pre-tax portion of returned amount
       refundTotal += lineTotal;
-      restoreLines.push({
+      refundSubtotal += lineSub;
+      refundTax += lineTax;
+      refundLineDiscount += lineDisc;
+
+      const unitCost = Number(src.costPrice) > 0 ? Number(src.costPrice) : 0;
+
+      lineUpdates.push({
+        id: src.id,
+        newQty: Math.max(0, roundMoney(max - qty)),
+        newDiscount: Math.max(0, roundMoney(Number(src.discount) - lineDisc)),
+        newTax: Math.max(0, roundMoney(Number(src.taxAmount) - lineTax)),
+        newTotal: Math.max(0, roundMoney(Number(src.total) - lineTotal)),
         productId: src.productId,
-        quantity: qty,
-        unitPrice: unit,
-        productName: src.productName,
+        returnQty: qty,
+        unitCost,
       });
     }
 
     refundTotal = roundMoney(refundTotal);
+    refundSubtotal = roundMoney(refundSubtotal);
+    refundTax = roundMoney(refundTax);
+
+    // Allocate order-level discount proportionally to returned pre-tax share
+    const saleSubtotal = Number(sale.subtotal);
+    const orderDiscShare =
+      saleSubtotal > 0
+        ? roundMoney((refundSubtotal / saleSubtotal) * Number(sale.discountAmount))
+        : 0;
 
     return prisma.$transaction(async (tx) => {
+      // Resolve missing unit costs from product master for restock movements
+      for (const u of lineUpdates) {
+        if (u.unitCost > 0) continue;
+        const p = await tx.product.findUnique({
+          where: { id: u.productId },
+          select: { costPrice: true },
+        });
+        u.unitCost = Number(p?.costPrice || 0);
+      }
+
       await restoreSaleInventory(
         tx,
         cid,
@@ -721,18 +830,41 @@ export async function refundSale(
           id: sale.id,
           saleNo: sale.saleNo,
           warehouseId: sale.warehouseId,
-          items: restoreLines,
+          items: [],
         },
         userId,
-        `Partial refund: ${reason}`
+        `Partial refund: ${reason}`,
+        lineUpdates.map((u) => ({
+          productId: u.productId,
+          quantity: u.returnQty,
+          unitCost: u.unitCost,
+        }))
       );
+
+      for (const u of lineUpdates) {
+        if (u.newQty <= 0.0001) {
+          await tx.saleItem.delete({ where: { id: u.id } });
+        } else {
+          await tx.saleItem.update({
+            where: { id: u.id },
+            data: {
+              quantity: u.newQty,
+              discount: u.newDiscount,
+              taxAmount: u.newTax,
+              total: u.newTotal,
+            },
+          });
+        }
+      }
 
       const newPaid = Math.max(0, roundMoney(Number(sale.paidAmount) - refundTotal));
       const newTotal = Math.max(0, roundMoney(Number(sale.total) - refundTotal));
-      const fullyReturned = input.items!.every((line) => {
-        const src = itemMap.get(line.saleItemId)!;
-        return Number(line.quantity) >= Number(src.quantity);
-      }) && input.items!.length >= sale.items.length;
+      const newSubtotal = Math.max(0, roundMoney(Number(sale.subtotal) - refundSubtotal));
+      const newTax = Math.max(0, roundMoney(Number(sale.taxAmount) - refundTax));
+      const newOrderDisc = Math.max(0, roundMoney(Number(sale.discountAmount) - orderDiscShare));
+
+      const remainingItems = await tx.saleItem.count({ where: { saleId } });
+      const fullyReturned = remainingItems === 0 || newTotal <= 0.0001;
 
       if (sale.shiftId) {
         await tx.shift.update({
@@ -755,6 +887,9 @@ export async function refundSale(
               : sale.paymentStatus,
           paidAmount: newPaid,
           total: newTotal,
+          subtotal: newSubtotal,
+          taxAmount: newTax,
+          discountAmount: newOrderDisc,
           notes: [sale.notes, `Partial refund ${refundTotal}: ${reason}`]
             .filter(Boolean)
             .join(' | '),

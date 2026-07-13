@@ -1129,6 +1129,8 @@ model SaleItem {
   sku         String?
   quantity    Decimal  @db.Decimal(18, 4)
   unitPrice   Decimal  @db.Decimal(18, 4)
+  /// Unit cost snapshot at sale time (for accurate historical COGS / profit)
+  costPrice   Decimal  @db.Decimal(18, 4) @default(0)
   discount    Decimal  @db.Decimal(18, 4) @default(0)
   taxAmount   Decimal  @db.Decimal(18, 4) @default(0)
   total       Decimal  @db.Decimal(18, 4)
